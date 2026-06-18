@@ -12,7 +12,7 @@ from app.agent.dispatcher import dispatch_tool_call
 from app.agent.presenter import render_tool_reply
 from app.agent.prompts import build_system_prompt
 from app.agent.tools import ALL_TOOLS, TOOLS_BY_STATE
-from app.api.v1.common import assemble_response
+from app.api.v1.common import assemble_response, ensure_order_access
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.dependencies import get_optional_user
@@ -58,6 +58,7 @@ async def chat(
     await SessionRepository.get_or_create(db, req.session_id)
 
     order = await OrderRepository.get_active_by_session(db, req.session_id)
+    await ensure_order_access(db, order, user)  # 403 if order owned by another account
     current_state = order.status.value if order else "IDLE"
 
     history = await ConversationRepository.get_history(db, req.session_id, limit=20)
@@ -121,6 +122,6 @@ async def chat(
     await ConversationRepository.add_message(db, req.session_id, "assistant", reply)
 
     order = await OrderRepository.get_latest_by_session(db, req.session_id)
-    if user and order and not order.user_id:
-        await OrderRepository.update(db, order, user_id=user.id)
+    # Bind a freshly-created (anonymous) order to the authenticated caller.
+    await ensure_order_access(db, order, user)
     return await assemble_response(db, order, user, reply, tool_called)

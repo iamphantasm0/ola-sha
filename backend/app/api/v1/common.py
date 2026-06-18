@@ -1,11 +1,29 @@
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.actions import build_actions
 from app.models.order import Order
 from app.models.user import User
 from app.repositories.accounts import AccountRepository
+from app.repositories.orders import OrderRepository
+
+
+async def ensure_order_access(db: AsyncSession, order: Optional[Order], user: Optional[User]) -> None:
+    """Authorization guard for order mutations / reads.
+
+    - If the order is owned by a user, only that authenticated user may touch it (403).
+    - If the order is anonymous and the caller is authenticated, bind it to them so it
+      can never afterwards be acted on by a bare session_id.
+    """
+    if order is None:
+        return
+    if order.user_id is not None:
+        if user is None or str(order.user_id) != str(user.id):
+            raise HTTPException(status_code=403, detail="This order belongs to another account")
+    elif user is not None:
+        await OrderRepository.update(db, order, user_id=user.id)
 
 
 def order_state_json(order: Optional[Order]) -> Optional[dict]:

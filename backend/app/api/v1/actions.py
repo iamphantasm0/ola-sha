@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.presenter import render_tool_reply
-from app.api.v1.common import assemble_response
+from app.api.v1.common import assemble_response, ensure_order_access
 from app.core.db import get_db
 from app.core.dependencies import get_optional_user
 from app.models.user import User
@@ -47,6 +47,8 @@ async def action(
     order = await OrderRepository.get_active_by_session(db, req.session_id)
     if not order:
         raise HTTPException(status_code=409, detail="No active order for this session")
+    # 403 if this order belongs to another account; binds anonymous orders to the caller.
+    await ensure_order_access(db, order, user)
 
     a, p = req.action, req.payload or {}
 
