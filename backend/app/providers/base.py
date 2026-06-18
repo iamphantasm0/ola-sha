@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from typing import Optional
 
 
+class ProviderError(Exception):
+    """A provider (e.g. Paycrest) rejected the request with a user-presentable reason."""
+
+
 @dataclass
 class QuoteResult:
     provider: str

@@ -1,4 +1,5 @@
 import logging
+import uuid
 from typing import Optional
 
 import httpx
@@ -8,6 +9,7 @@ from app.providers.base import (
     IFiatProvider,
     OrderResult,
     PaymentInstructions,
+    ProviderError,
     QuoteResult,
 )
 
@@ -211,7 +213,8 @@ class PaycrestProvider(IFiatProvider):
                     "memo": f"Ola {sender_id[:8]}",
                 },
             },
-            "reference": f"ola-off-{sender_id[:12]}",
+            # Unique per order — Paycrest 400s on a duplicate reference.
+            "reference": f"ola-off-{uuid.uuid4().hex[:16]}",
         }
         data = await self._create_order(payload)
         acct = data.get("providerAccount", {})
@@ -258,7 +261,7 @@ class PaycrestProvider(IFiatProvider):
                 "currency": token,
                 "recipient": {"address": wallet_address, "network": network},
             },
-            "reference": f"ola-on-{sender_id[:12]}",
+            "reference": f"ola-on-{uuid.uuid4().hex[:16]}",
         }
         data = await self._create_order(payload)
         acct = data.get("providerAccount", {})
@@ -283,7 +286,14 @@ class PaycrestProvider(IFiatProvider):
             resp = await client.post(
                 f"{self.BASE_URL}/sender/orders", headers=self.headers, json=payload
             )
-            resp.raise_for_status()
+            if resp.status_code >= 400:
+                msg = ""
+                try:
+                    msg = resp.json().get("message", "")
+                except Exception:  # noqa: BLE001
+                    msg = resp.text[:200]
+                logger.warning("Paycrest order create %s: %s", resp.status_code, msg)
+                raise ProviderError(msg or f"Provider rejected the order ({resp.status_code}).")
             return resp.json()["data"]
 
     # ─── Status polling ──────────────────────────────────────────────────────

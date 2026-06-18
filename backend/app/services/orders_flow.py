@@ -10,7 +10,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order, OrderStatus
-from app.providers.base import IFiatProvider
+from app.providers.base import IFiatProvider, ProviderError
 from app.repositories.orders import OrderRepository
 
 logger = logging.getLogger(__name__)
@@ -54,11 +54,14 @@ async def create_offramp(db: AsyncSession, order: Order, provider: IFiatProvider
     """Create the Paycrest offramp order from the staged bank details; -> AWAITING_DEPOSIT."""
     if not order.institution_code:
         return {"error": "No bank details on file. Please provide your bank and account number."}
-    result = await provider.create_offramp_order(
-        token=order.token, amount=float(order.amount), currency=order.currency,
-        institution_code=order.institution_code, account_number=order.account_number,
-        account_name=order.account_name, sender_id=sender_id,
-    )
+    try:
+        result = await provider.create_offramp_order(
+            token=order.token, amount=float(order.amount), currency=order.currency,
+            institution_code=order.institution_code, account_number=order.account_number,
+            account_name=order.account_name, sender_id=sender_id,
+        )
+    except ProviderError as e:
+        return {"error": f"Couldn't create the order: {e}"}
     pi = result.payment_instructions
     await OrderRepository.update(
         db, order, paycrest_order_id=result.provider_order_id,
@@ -75,10 +78,13 @@ async def create_offramp(db: AsyncSession, order: Order, provider: IFiatProvider
 async def create_onramp(db: AsyncSession, order: Order, provider: IFiatProvider, sender_id: str,
                         wallet_address: str, network: str) -> dict:
     """Create the Paycrest onramp order; -> AWAITING_PAYMENT."""
-    result = await provider.create_onramp_order(
-        token=order.token, amount=float(order.output_amount or order.amount),
-        currency=order.currency, wallet_address=wallet_address, network=network, sender_id=sender_id,
-    )
+    try:
+        result = await provider.create_onramp_order(
+            token=order.token, amount=float(order.output_amount or order.amount),
+            currency=order.currency, wallet_address=wallet_address, network=network, sender_id=sender_id,
+        )
+    except ProviderError as e:
+        return {"error": f"Couldn't create the order: {e}"}
     pi = result.payment_instructions
     await OrderRepository.update(
         db, order, wallet_address=wallet_address, network=network,
