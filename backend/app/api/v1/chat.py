@@ -12,8 +12,11 @@ from app.agent.dispatcher import dispatch_tool_call
 from app.agent.presenter import render_tool_reply
 from app.agent.prompts import build_system_prompt
 from app.agent.tools import ALL_TOOLS, TOOLS_BY_STATE
+from app.api.v1.common import assemble_response
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.dependencies import get_optional_user
+from app.models.user import User
 from app.providers.paycrest import PaycrestProvider
 from app.repositories.conversations import ConversationRepository
 from app.repositories.orders import OrderRepository
@@ -41,32 +44,12 @@ class ChatRequest(BaseModel):
     message: str
 
 
-class ChatResponse(BaseModel):
-    reply: str
-    order_state: dict | None = None
-    tool_called: str | None = None
-
-
-def _order_state(order) -> dict | None:
-    if not order:
-        return None
-    return {
-        "order_id": str(order.id),
-        "status": order.status.value,
-        "direction": order.direction,
-        "amount": float(order.amount) if order.amount else None,
-        "token": order.token,
-        "currency": order.currency,
-        "output_amount": float(order.output_amount) if order.output_amount else None,
-        "deposit_address": order.deposit_address,
-        "storage_hash": order.storage_hash,
-        "registry_tx_hash": order.registry_tx_hash,
-        "paycrest_order_id": order.paycrest_order_id,
-    }
-
-
-@router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/chat")
+async def chat(
+    req: ChatRequest,
+    user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
     try:
         uuid.UUID(str(req.session_id))
     except ValueError:
@@ -138,4 +121,6 @@ async def chat(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     await ConversationRepository.add_message(db, req.session_id, "assistant", reply)
 
     order = await OrderRepository.get_latest_by_session(db, req.session_id)
-    return ChatResponse(reply=reply, order_state=_order_state(order), tool_called=tool_called)
+    if user and order and not order.user_id:
+        await OrderRepository.update(db, order, user_id=user.id)
+    return await assemble_response(db, order, user, reply, tool_called)

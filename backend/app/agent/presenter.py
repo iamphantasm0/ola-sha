@@ -31,7 +31,7 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
             f"You send: {r.get('you_send')}\n"
             f"You receive: {r.get('you_receive')}\n"
             f"Fee: {r.get('fee')}\n\n"
-            "Reply **yes** to confirm, or tell me a different amount."
+            "Choose where to receive your payout below — or just tell me a different amount."
         )
 
     if tool_name == "get_onramp_quote":
@@ -40,7 +40,7 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
             f"You pay: {r.get('you_pay')}\n"
             f"You receive: {r.get('you_receive')}\n"
             f"Fee: {r.get('fee')}\n\n"
-            "Reply **yes** to confirm, or tell me a different amount."
+            "Choose the wallet to receive your stablecoin below — or tell me a different amount."
         )
 
     if tool_name == "confirm_offramp":
@@ -57,13 +57,13 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
         )
 
     if tool_name == "submit_bank_details":
-        # Name verified — ask the user to confirm before creating the order.
+        # Name verified — confirmation happens via the buttons below.
         return (
             f"I verified this account:\n\n"
             f"Name: **{r.get('verified_account_name')}**\n"
             f"Bank: {r.get('bank')}\n"
             f"Account: {r.get('account_number')}\n\n"
-            "Is this correct? Reply **yes** to proceed, or send the correct bank and account number."
+            "Confirm below to get your deposit address."
         )
 
     if tool_name == "confirm_bank_details":
