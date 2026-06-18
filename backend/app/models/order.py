@@ -55,6 +55,7 @@ class Order(Base, TimestampMixin):
     __tablename__ = "orders"
 
     session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     direction = Column(String(10), nullable=True)  # "onramp" | "offramp"
     token = Column(String(10), nullable=True)  # "USDC" | "USDT"
     amount = Column(Numeric(18, 6), nullable=True)

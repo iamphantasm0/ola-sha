@@ -1,0 +1,22 @@
+from typing import Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import hash_password
+from app.models.user import User
+
+
+class UserRepository:
+    @staticmethod
+    async def get_by_email(db: AsyncSession, email: str) -> Optional[User]:
+        result = await db.execute(select(User).where(User.email == email.lower().strip()))
+        return result.scalars().first()
+
+    @staticmethod
+    async def create(db: AsyncSession, email: str, password: str) -> User:
+        user = User(email=email.lower().strip(), password_hash=hash_password(password))
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
