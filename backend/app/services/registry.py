@@ -66,5 +66,7 @@ async def log_to_registry(
     signed = acct.sign_transaction(tx)
     tx_hash = await w3.eth.send_raw_transaction(signed.raw_transaction)
     receipt = await w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-    logger.info("logSettlement tx %s status=%s", receipt.transactionHash.hex(), receipt.status)
-    return receipt.transactionHash.hex()
+    h = receipt.transactionHash.hex()
+    h = h if h.startswith("0x") else "0x" + h  # explorer-friendly + matches storage hash format
+    logger.info("logSettlement tx %s status=%s", h, receipt.status)
+    return h

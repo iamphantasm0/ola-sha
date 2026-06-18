@@ -111,7 +111,9 @@ the same logic in `app/services/settlement.py`:
 | Storage explorer | `https://storagescan-galileo.0g.ai` |
 
 ## Notes
-- **Storage SDK:** `@0glabs/0g-ts-sdk` (not `@0gfoundation/...`), ethers **v6**, `evmVersion: cancun`.
+- **Storage SDK:** `@0gfoundation/0g-storage-ts-sdk` (the current package, v1.2.x — the old
+  `@0glabs/0g-ts-sdk@0.3.3` produces a submission format the current testnet flow contract
+  rejects with `require(false)`). ethers **v6**, `evmVersion: cancun`.
 - **0G Compute model:** default **MiniMax-M3** (free, native tool use, verifiable, 1M ctx);
   fallback **0GM-1.0-35B-A3B**. Confirm exact model-id strings from the router `/models`.
 - **Paycrest** is mainnet-only with a $0.50 minimum — the live demo moves small real funds.

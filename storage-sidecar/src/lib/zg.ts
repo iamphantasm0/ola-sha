@@ -1,4 +1,4 @@
-import { ZgFile, Indexer } from "@0glabs/0g-ts-sdk";
+import { ZgFile, Indexer } from "@0gfoundation/0g-storage-ts-sdk";
 import { ethers } from "ethers";
 import * as fs from "fs";
 import * as os from "os";
