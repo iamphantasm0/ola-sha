@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchOrder, sendChat } from "../lib/api";
+import { fetchOrder, sendAction, sendChat } from "../lib/api";
 import { getSessionId, resetSession } from "../lib/session";
-import { ChatMessage, OrderState, POLLING_STATES, TERMINAL_STATES } from "../lib/types";
+import { Action, ChatMessage, OrderState, POLLING_STATES, TERMINAL_STATES } from "../lib/types";
 
 const GREETING: ChatMessage = {
   role: "assistant",
@@ -14,6 +14,7 @@ const GREETING: ChatMessage = {
 export function useChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [order, setOrder] = useState<OrderState | null>(null);
+  const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(false);
   const sessionRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -29,7 +30,6 @@ export function useChat() {
     }
   }, []);
 
-  // Poll the order endpoint while awaiting an external event (deposit/payment/settlement).
   useEffect(() => {
     stopPolling();
     if (!order || !POLLING_STATES.has(order.status)) return;
@@ -37,24 +37,29 @@ export function useChat() {
       try {
         const fresh = await fetchOrder(order.order_id, sessionRef.current);
         setOrder(fresh);
-        if (TERMINAL_STATES.has(fresh.status) || !POLLING_STATES.has(fresh.status)) {
-          stopPolling();
-        }
+        if (TERMINAL_STATES.has(fresh.status) || !POLLING_STATES.has(fresh.status)) stopPolling();
         if (fresh.status === "SETTLED") {
+          setActions([]);
           setMessages((m) => [
             ...m,
             {
               role: "assistant",
-              content: `Transaction complete. Receipt stored on 0G.\nStorage hash: ${fresh.storage_hash ?? "—"}`,
+              content: `Settled. ✅ Receipt on 0G.\nStorage hash: ${fresh.storage_hash ?? "—"}`,
             },
           ]);
         }
       } catch {
-        /* transient — keep polling */
+        /* transient */
       }
     }, 3000);
     return stopPolling;
   }, [order, stopPolling]);
+
+  const apply = useCallback((res: { reply: string; order_state: OrderState | null; actions: Action[] }) => {
+    setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
+    setOrder(res.order_state);
+    setActions(res.actions || []);
+  }, []);
 
   const send = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -62,18 +67,26 @@ export function useChat() {
     setMessages((m) => [...m, { role: "user", content: trimmed }]);
     setLoading(true);
     try {
-      const res = await sendChat(trimmed, sessionRef.current);
-      setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
-      if (res.order_state) setOrder(res.order_state);
+      apply(await sendChat(trimmed, sessionRef.current));
     } catch {
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", content: "Something went wrong reaching the service. Please try again." },
-      ]);
+      setMessages((m) => [...m, { role: "assistant", content: "Something went wrong. Please try again." }]);
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, [loading, apply]);
+
+  const runAction = useCallback(async (action: string, payload: Record<string, any> = {}, userEcho?: string) => {
+    if (loading) return;
+    if (userEcho) setMessages((m) => [...m, { role: "user", content: userEcho }]);
+    setLoading(true);
+    try {
+      apply(await sendAction(action, sessionRef.current, payload));
+    } catch (e: any) {
+      setMessages((m) => [...m, { role: "assistant", content: e.message || "That action failed. Please try again." }]);
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, apply]);
 
   const newChat = useCallback(() => {
     stopPolling();
@@ -81,7 +94,8 @@ export function useChat() {
     sessionRef.current = getSessionId();
     setMessages([GREETING]);
     setOrder(null);
+    setActions([]);
   }, [stopPolling]);
 
-  return { messages, order, loading, send, newChat };
+  return { messages, order, actions, loading, send, runAction, newChat };
 }

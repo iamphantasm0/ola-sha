@@ -5,6 +5,13 @@ export interface ChatMessage {
   content: string;
 }
 
+export interface Action {
+  type: string;
+  label: string;
+  payload?: Record<string, any>;
+  primary?: boolean;
+}
+
 export interface OrderState {
   order_id: string;
   status: string;
@@ -13,6 +20,9 @@ export interface OrderState {
   token: string | null;
   currency: string | null;
   output_amount: number | null;
+  account_name?: string | null;
+  bank_name?: string | null;
+  account_number?: string | null;
   deposit_address: string | null;
   storage_hash: string | null;
   registry_tx_hash: string | null;
@@ -22,7 +32,25 @@ export interface OrderState {
 export interface ChatResponse {
   reply: string;
   order_state: OrderState | null;
+  actions: Action[];
   tool_called: string | null;
+  authenticated: boolean;
+}
+
+export interface SavedBank {
+  id: string;
+  currency: string;
+  bank_name: string;
+  account_number: string;
+  account_name: string;
+  label: string | null;
+}
+
+export interface SavedWallet {
+  id: string;
+  address: string;
+  network: string;
+  label: string | null;
 }
 
 // States where the backend is awaiting an external event — poll for updates.
