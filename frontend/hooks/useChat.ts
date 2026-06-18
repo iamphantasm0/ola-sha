@@ -8,7 +8,7 @@ import { Action, ChatMessage, OrderState, POLLING_STATES, TERMINAL_STATES } from
 const GREETING: ChatMessage = {
   role: "assistant",
   content:
-    "Hi, I'm Ola. I help you swap between stablecoins and local currency.\n\nTry: \"sell 200 USDT for NGN\" or \"buy 50 USDT with KES\".",
+    "I'm Ola, your stablecoin concierge. Tell me what you'd like to do and I'll handle the rest — every settlement is proven on 0G.\n\nTry: \"sell 200 USDC for naira\" or \"buy 50 USDT with shillings\".",
 };
 
 export function useChat() {

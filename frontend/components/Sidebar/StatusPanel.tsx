@@ -1,63 +1,114 @@
 import { OrderState } from "../../lib/types";
 import { ReceiptCard } from "./ReceiptCard";
 
-function Row({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div className="flex justify-between gap-2 py-1 text-xs">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-right text-[#e6e8ec] break-all">{value}</span>
-    </div>
-  );
-}
-
 const STATUS_LABEL: Record<string, string> = {
-  IDLE: "Idle",
+  IDLE: "Drafting",
   OFFRAMP_QUOTING: "Quote ready",
-  OFFRAMP_COLLECTING_BANK: "Collecting bank details",
+  OFFRAMP_COLLECTING_BANK: "Awaiting bank",
+  OFFRAMP_CONFIRMING_BANK: "Confirm payout",
   OFFRAMP_AWAITING_DEPOSIT: "Awaiting your deposit",
-  OFFRAMP_PROCESSING: "Settling…",
+  OFFRAMP_PROCESSING: "Settling",
   ONRAMP_QUOTING: "Quote ready",
-  ONRAMP_COLLECTING_WALLET: "Collecting wallet",
+  ONRAMP_COLLECTING_WALLET: "Awaiting wallet",
   ONRAMP_AWAITING_PAYMENT: "Awaiting your payment",
-  ONRAMP_PROCESSING: "Settling…",
+  ONRAMP_PROCESSING: "Settling",
   SETTLED: "Settled",
   FAILED: "Failed",
   CANCELLED: "Cancelled",
 };
 
-export function StatusPanel({ order }: { order: OrderState | null }) {
+// The journey, in order, used to draw the progress rail.
+const FLOW = [
+  ["OFFRAMP_QUOTING", "ONRAMP_QUOTING"],
+  ["OFFRAMP_COLLECTING_BANK", "OFFRAMP_CONFIRMING_BANK", "ONRAMP_COLLECTING_WALLET"],
+  ["OFFRAMP_AWAITING_DEPOSIT", "ONRAMP_AWAITING_PAYMENT"],
+  ["OFFRAMP_PROCESSING", "ONRAMP_PROCESSING"],
+  ["SETTLED"],
+];
+const STEP_NAMES = ["Quote", "Details", "Fund", "Settle", "Receipt"];
+
+function Row({ label, value }: { label: string; value?: string | null }) {
+  if (!value) return null;
   return (
-    <div className="flex h-full w-full flex-col gap-3 border-l border-edge bg-ink p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-        Transaction
+    <div className="flex items-baseline justify-between gap-3 py-1.5">
+      <span className="text-[11px] uppercase tracking-[0.12em] text-paper-muted">{label}</span>
+      <span className="text-right font-mono text-[13px] text-paper-ink">{value}</span>
+    </div>
+  );
+}
+
+export function StatusPanel({ order }: { order: OrderState | null }) {
+  const activeStep = order
+    ? Math.max(0, FLOW.findIndex((states) => states.includes(order.status)))
+    : -1;
+  const settled = order?.status === "SETTLED";
+  const failed = order?.status === "FAILED" || order?.status === "CANCELLED";
+
+  return (
+    <div className="paper paper-lines flex h-full flex-col rounded-2xl p-5">
+      <div className="flex items-baseline justify-between border-b border-paper-ink/10 pb-3">
+        <span className="font-display text-lg text-paper-ink">Statement</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-muted">
+          Ola · 0G
+        </span>
       </div>
 
       {!order ? (
-        <div className="text-xs text-gray-500">No active transaction yet.</div>
+        <div className="mt-8 text-sm leading-relaxed text-paper-muted">
+          No transaction yet.
+          <br />
+          Tell Ola what you'd like to do and your statement will appear here.
+        </div>
       ) : (
         <>
-          <div className="rounded-xl border border-edge bg-panel p-3">
-            <div className="mb-1 text-sm font-medium text-accent">
+          <div className="mt-3">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                settled
+                  ? "bg-success/15 text-success"
+                  : failed
+                  ? "bg-danger/15 text-danger"
+                  : "bg-paper-ink/8 text-paper-ink"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${settled ? "bg-success" : failed ? "bg-danger" : "bg-gold"} ${!settled && !failed ? "animate-pulse" : ""}`} />
               {STATUS_LABEL[order.status] ?? order.status}
+            </span>
+          </div>
+
+          {/* progress rail */}
+          {!failed && (
+            <div className="mt-4 flex gap-1.5">
+              {STEP_NAMES.map((name, i) => (
+                <div key={name} className="flex-1">
+                  <div className={`h-1 rounded-full ${i <= activeStep ? "bg-gold" : "bg-paper-ink/12"}`} />
+                  <div className={`mt-1.5 text-[9px] uppercase tracking-wide ${i <= activeStep ? "text-paper-ink" : "text-paper-muted/60"}`}>
+                    {name}
+                  </div>
+                </div>
+              ))}
             </div>
-            <Row label="Direction" value={order.direction} />
-            <Row
-              label="Amount"
-              value={order.amount && order.token ? `${order.amount} ${order.token}` : null}
-            />
-            <Row label="Currency" value={order.currency} />
+          )}
+
+          <div className="mt-4 border-t border-paper-ink/10 pt-1">
+            <Row label="Type" value={order.direction === "offramp" ? "Sell · crypto → cash" : order.direction === "onramp" ? "Buy · cash → crypto" : null} />
+            <Row label="Amount" value={order.amount && order.token ? `${order.amount} ${order.token}` : null} />
             <Row
               label="You receive"
-              value={
-                order.output_amount && order.currency
-                  ? `${order.output_amount.toLocaleString()} ${order.currency}`
-                  : null
-              }
+              value={order.output_amount && order.currency ? `${order.output_amount.toLocaleString()} ${order.currency}` : null}
             />
-            <Row label="Paycrest ref" value={order.paycrest_order_id} />
-            <Row label="Deposit to" value={order.deposit_address} />
+            <Row label="Beneficiary" value={order.account_name} />
+            <Row label="Account" value={order.account_number ? `${order.bank_name ?? ""} ••${order.account_number.slice(-4)}` : null} />
+            <Row label="Provider ref" value={order.paycrest_order_id ? `${order.paycrest_order_id.slice(0, 10)}…` : null} />
           </div>
+
+          {order.deposit_address && !settled && (
+            <div className="mt-3 rounded-lg border border-paper-ink/12 bg-paper-ink/[0.03] p-2.5">
+              <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">Send {order.token} to</div>
+              <div className="mt-0.5 break-all font-mono text-[11px] text-paper-ink">{order.deposit_address}</div>
+            </div>
+          )}
+
           <ReceiptCard order={order} />
         </>
       )}

@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Action } from "../../lib/types";
 
 const NETWORKS = ["base", "polygon", "arbitrum", "ethereum", "bnb"];
+const inputCls =
+  "w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-text outline-none focus:border-gold/50 placeholder:text-muted/60";
 
 export function ActionButtons({
   actions,
@@ -45,32 +47,22 @@ export function ActionButtons({
 
   if (form === "bank") {
     return (
-      <div className="mt-2 space-y-2 rounded-xl border border-edge bg-panel p-3">
-        <div className="text-xs text-gray-400">Enter your payout bank</div>
-        <input
-          placeholder="Bank name (e.g. GTBank, Kuda)"
-          value={bankName}
-          onChange={(e) => setBankName(e.target.value)}
-          className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <input
-          placeholder="Account number"
-          value={acctNum}
-          onChange={(e) => setAcctNum(e.target.value)}
-          className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <div className="flex gap-2">
+      <div className="animate-riseIn mt-1 max-w-sm space-y-2.5 rounded-xl border border-edge bg-panel p-3.5">
+        <div className="text-xs uppercase tracking-[0.14em] text-muted">Payout account</div>
+        <input className={inputCls} placeholder="Bank name (e.g. GTBank, Kuda)" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+        <input className={inputCls} placeholder="Account number" value={acctNum} onChange={(e) => setAcctNum(e.target.value)} />
+        <div className="flex gap-2 pt-0.5">
           <button
             disabled={disabled || !bankName || !acctNum}
             onClick={() => {
               onRun("submit_bank", { bank_name: bankName, account_number: acctNum }, `${bankName} ${acctNum}`);
               setForm(null);
             }}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink disabled:opacity-40"
+            className="rounded-lg bg-gold px-3.5 py-1.5 text-sm font-medium text-ink disabled:opacity-40"
           >
-            Verify
+            Verify account
           </button>
-          <button onClick={() => setForm(null)} className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-300">
+          <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:text-text">
             Back
           </button>
         </div>
@@ -80,37 +72,26 @@ export function ActionButtons({
 
   if (form === "wallet") {
     return (
-      <div className="mt-2 space-y-2 rounded-xl border border-edge bg-panel p-3">
-        <div className="text-xs text-gray-400">Enter your wallet</div>
-        <input
-          placeholder="0x… address"
-          value={addr}
-          onChange={(e) => setAddr(e.target.value)}
-          className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm outline-none focus:border-accent"
-        />
-        <select
-          value={net}
-          onChange={(e) => setNet(e.target.value)}
-          className="w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm outline-none focus:border-accent"
-        >
+      <div className="animate-riseIn mt-1 max-w-sm space-y-2.5 rounded-xl border border-edge bg-panel p-3.5">
+        <div className="text-xs uppercase tracking-[0.14em] text-muted">Receiving wallet</div>
+        <input className={`${inputCls} font-mono`} placeholder="0x… address" value={addr} onChange={(e) => setAddr(e.target.value)} />
+        <select className={inputCls} value={net} onChange={(e) => setNet(e.target.value)}>
           {NETWORKS.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
+            <option key={n} value={n}>{n}</option>
           ))}
         </select>
-        <div className="flex gap-2">
+        <div className="flex gap-2 pt-0.5">
           <button
             disabled={disabled || !addr}
             onClick={() => {
               onRun("submit_wallet", { address: addr, network: net }, `${addr} (${net})`);
               setForm(null);
             }}
-            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink disabled:opacity-40"
+            className="rounded-lg bg-gold px-3.5 py-1.5 text-sm font-medium text-ink disabled:opacity-40"
           >
             Use wallet
           </button>
-          <button onClick={() => setForm(null)} className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-300">
+          <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:text-text">
             Back
           </button>
         </div>
@@ -119,23 +100,20 @@ export function ActionButtons({
   }
 
   return (
-    <div className="mt-2 flex flex-wrap gap-2">
-      {actions.map((a, i) => (
-        <button
-          key={i}
-          disabled={disabled}
-          onClick={() => click(a)}
-          className={`rounded-lg px-3 py-1.5 text-sm disabled:opacity-40 ${
-            a.primary
-              ? "bg-accent font-medium text-ink"
-              : a.type === "cancel"
-              ? "border border-edge text-gray-400 hover:text-gray-200"
-              : "border border-accent/40 text-accent hover:bg-accent/10"
-          }`}
-        >
-          {a.label}
-        </button>
-      ))}
+    <div className="animate-riseIn mt-1 flex flex-wrap gap-2">
+      {actions.map((a, i) => {
+        const base = "rounded-full px-4 py-2 text-sm transition-transform hover:-translate-y-px disabled:opacity-40 disabled:hover:translate-y-0";
+        const style = a.primary
+          ? "bg-gold font-medium text-ink"
+          : a.type === "cancel"
+          ? "text-muted hover:text-danger"
+          : "border border-gold/35 text-gold hover:bg-gold-soft";
+        return (
+          <button key={i} disabled={disabled} onClick={() => click(a)} className={`${base} ${style}`}>
+            {a.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

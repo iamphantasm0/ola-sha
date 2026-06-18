@@ -13,37 +13,37 @@ export default function Home() {
   const [showAuth, setShowAuth] = useState(false);
 
   return (
-    <main className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-edge px-4 py-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg font-semibold text-accent">Ola</span>
-          <span className="hidden text-xs text-gray-500 sm:inline">
-            AI Crypto ↔ Fiat · powered by 0G
+    <main className="ola-bg flex h-screen flex-col">
+      <header className="flex items-center justify-between border-b border-edge px-5 py-3.5">
+        <div className="flex items-baseline gap-3">
+          <span className="font-display text-2xl font-semibold tracking-tight text-gold">Ola</span>
+          <span className="hidden text-[11px] uppercase tracking-[0.22em] text-muted sm:inline">
+            stablecoin concierge
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={newChat}
-            className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:border-accent"
+            className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
           >
-            New Chat
+            New transaction
           </button>
           {isAuthed ? (
-            <div className="flex items-center gap-2">
-              <span className="hidden text-xs text-gray-400 sm:inline">{email}</span>
+            <div className="flex items-center gap-2.5">
+              <span className="hidden font-mono text-xs text-muted sm:inline">{email}</span>
               <button
                 onClick={logout}
-                className="rounded-lg border border-edge px-3 py-1.5 text-xs text-gray-300 hover:border-accent"
+                className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
               >
-                Log out
+                Sign out
               </button>
             </div>
           ) : (
             <button
               onClick={() => setShowAuth(true)}
-              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink"
+              className="rounded-full bg-gold px-4 py-1.5 text-xs font-medium text-ink transition-transform hover:-translate-y-px"
             >
-              Log in / Sign up
+              Sign in
             </button>
           )}
         </div>
@@ -61,7 +61,7 @@ export default function Home() {
             onRequireLogin={() => setShowAuth(true)}
           />
         </div>
-        <aside className="hidden w-[260px] shrink-0 md:block">
+        <aside className="hidden w-[300px] shrink-0 p-3 md:block">
           <StatusPanel order={order} />
         </aside>
       </div>
