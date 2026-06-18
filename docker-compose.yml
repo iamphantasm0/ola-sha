@@ -7,8 +7,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Loopback-only: backend reaches db over the compose network; not exposed to the LAN.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -38,7 +39,10 @@ services:
 
   frontend:
     build: ./frontend
-    env_file: .env
+    # Minimal env — the frontend must NOT receive backend secrets (keys, db, paycrest).
+    environment:
+      BACKEND_URL: ${BACKEND_URL:-http://backend:8000}
+      NEXT_PUBLIC_APP_NAME: ${NEXT_PUBLIC_APP_NAME:-Ola}
     ports:
       - "3000:3000"
     depends_on:
