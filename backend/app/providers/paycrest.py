@@ -94,20 +94,29 @@ class PaycrestProvider(IFiatProvider):
         return items
 
     _STOP = {"of", "for", "the", "and", "&"}
-    _GENERIC = {"bank", "mfb", "plc", "microfinance", "merchant", "limited", "ltd"}
+    _GENERIC = {
+        "bank", "mfb", "plc", "microfinance", "merchant", "limited", "ltd",
+        "nigeria", "ng",
+    }
 
     @staticmethod
     def _norm(s: str) -> str:
         return "".join(c for c in s.lower() if c.isalnum())
 
+    def _core(self, words: list[str]) -> set[str]:
+        """Distinctive words: drop stopwords and generic banking terms."""
+        return {w for w in words if w not in self._STOP and w not in self._GENERIC}
+
     async def resolve_institution_code(self, currency: str, bank_name: str) -> Optional[str]:
         """Match a human-typed bank name to a Paycrest institution code.
 
-        Handles full names ("Zenith Bank"), acronyms ("GTB", "UBA"), and the common
-        acronym+"bank" form ("GTBank" -> Guaranty Trust Bank).
+        Handles full names ("Zenith Bank"), partials ("Kuda Bank" -> Kuda Microfinance
+        Bank), acronyms ("GTB", "UBA"), and the acronym+"bank" form ("GTBank").
         """
         items = await self.get_institutions(currency)
         nt = self._norm(bank_name)
+        target_words = [self._norm(w) for w in bank_name.lower().split() if self._norm(w)]
+        core_target = self._core(target_words)
         if not nt:
             return None
 
@@ -115,36 +124,38 @@ class PaycrestProvider(IFiatProvider):
         for it in items:
             code = it.get("code", "")
             name = it.get("name", "")
-            words = name.lower().split()
+            words = [self._norm(w) for w in name.lower().split() if self._norm(w)]
             nn = self._norm(name)
 
             initials_all = "".join(w[0] for w in words if w)
             sig_words = [w for w in words if w not in self._STOP]
             initials_sig = "".join(w[0] for w in sig_words if w)
-            core_words = [w for w in sig_words if w not in self._GENERIC]
-            initials_core = "".join(w[0] for w in core_words if w)
+            core_name = self._core(words)
+            core_words_ordered = [w for w in sig_words if w not in self._GENERIC]
+            initials_core = "".join(w[0] for w in core_words_ordered if w)
 
             score = 0
             if nt == self._norm(code):
                 score = 1000
             elif nt == nn:
                 score = 950
-            elif nt in {initials_all, initials_sig} and len(nt) >= 2:
-                score = 900            # "GTB", "UBA"
+            elif len(nt) >= 2 and nt in {initials_all, initials_sig}:
+                score = 900                                  # "GTB", "UBA"
             elif initials_core and nt == initials_core + "bank":
-                score = 880            # "GTBank" -> Guaranty Trust + bank
+                score = 880                                  # "GTBank"
+            elif core_target and core_target <= core_name:
+                score = 860                                  # "Kuda Bank", "First Bank", "Guaranty Trust Bank"
+            elif core_name and core_name <= core_target:
+                score = 840                                  # user typed extra words
             elif len(nt) >= 3 and (nn.startswith(nt) or nt in nn):
-                score = 800            # "First Bank", "Zenith", "Access"
-            else:
-                # token overlap on meaningful words
-                tt = {w for w in nt.replace("bank", "") .split()} or {nt}
-                overlap = len({w[:4] for w in core_words} & {nt[:4]})
-                score = overlap * 50
+                score = 800                                  # "Zenit", substrings
+            elif core_target & core_name:
+                score = 300 * len(core_target & core_name)   # partial distinctive overlap
 
             if score > best_score:
                 best, best_score = code, score
 
-        return best if best_score >= 200 else None
+        return best if best_score >= 300 else None
 
     async def verify_bank_account(self, institution_code: str, account_identifier: str) -> str:
         """Fetch the canonical account holder name. Retries transient 5xx/timeouts."""
