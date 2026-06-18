@@ -43,6 +43,7 @@ async def dispatch_tool_call(
         "confirm_offramp": _confirm_offramp,
         "confirm_onramp": _confirm_onramp,
         "submit_bank_details": _submit_bank_details,
+        "confirm_bank_details": _confirm_bank_details,
         "submit_wallet_address": _submit_wallet_address,
         "check_deposit_status": _check_status,
         "check_payment_status": _check_status,
@@ -122,6 +123,8 @@ async def _confirm_onramp(args, order, session_id, provider, db) -> str:
 # ─── Submissions (the ONLY place Paycrest orders are created) ──────────────────
 
 async def _submit_bank_details(args, order, session_id, provider, db) -> str:
+    """Resolve the bank, fetch + verify the account name, and store it — but do NOT
+    create the order yet. The user must confirm the verified name first."""
     if not order:
         return SAFE_FALLBACK
     bank_name = args["bank_name"]
@@ -131,36 +134,49 @@ async def _submit_bank_details(args, order, session_id, provider, db) -> str:
     if not code:
         return json.dumps({"error": f"Could not match '{bank_name}' to a supported bank for {order.currency}."})
 
-    # Fetch + verify the canonical account holder name (no need to ask the user for it).
     try:
         canonical = await provider.verify_bank_account(code, account_number)
     except Exception as e:  # noqa: BLE001
         logger.warning("verify-account failed: %s", e)
-        return json.dumps({"error": "Could not verify that account number. Please double-check it."})
+        return json.dumps({"error": "Could not verify that account number right now. Please double-check it and try again."})
 
     if not canonical:
         return json.dumps({"error": "That account number could not be verified. Please double-check it."})
 
-    account_name = canonical
+    await OrderRepository.update(
+        db, order,
+        bank_name=bank_name, institution_code=code,
+        account_number=account_number, account_name=canonical,
+        status=OrderStatus.OFFRAMP_CONFIRMING_BANK,
+    )
+    return json.dumps({
+        "verified_account_name": canonical,
+        "bank": bank_name,
+        "account_number": account_number,
+    })
 
+
+async def _confirm_bank_details(args, order, session_id, provider, db) -> str:
+    """User confirmed the verified name — create the Paycrest order and return the
+    deposit address (rendered deterministically by the presenter)."""
+    if not order or not order.institution_code:
+        return SAFE_FALLBACK
     result = await provider.create_offramp_order(
         token=order.token, amount=float(order.amount), currency=order.currency,
-        institution_code=code, account_number=account_number,
-        account_name=account_name, sender_id=session_id,
+        institution_code=order.institution_code, account_number=order.account_number,
+        account_name=order.account_name, sender_id=session_id,
     )
     pi = result.payment_instructions
     await OrderRepository.update(
         db, order,
-        bank_name=bank_name, institution_code=code,
-        account_number=account_number, account_name=canonical or account_name,
         paycrest_order_id=result.provider_order_id,
         deposit_address=pi.deposit_address,
         status=OrderStatus.OFFRAMP_AWAITING_DEPOSIT,
     )
     return json.dumps({
-        "verified_account_name": account_name,
-        "bank": bank_name,
-        "account_number": account_number,
+        "verified_account_name": order.account_name,
+        "bank": order.bank_name,
+        "account_number": order.account_number,
         "deposit_address": pi.deposit_address,
         "deposit_token": pi.deposit_token,
         "deposit_network": pi.deposit_network,

@@ -88,6 +88,18 @@ ALL_TOOLS = {
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    "confirm_bank_details": {
+        "type": "function",
+        "function": {
+            "name": "confirm_bank_details",
+            "description": (
+                "Call ONLY after the user confirms (yes/correct) that the verified account "
+                "name you showed them is right. This creates the payout order and returns the "
+                "deposit address."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
     "submit_bank_details": {
         "type": "function",
         "function": {
@@ -189,6 +201,7 @@ TOOLS_BY_STATE = {
         "confirm_offramp", "submit_bank_details", "get_offramp_quote", "get_onramp_quote", "cancel_order",
     ],
     "OFFRAMP_COLLECTING_BANK": ["submit_bank_details", "get_offramp_quote", "cancel_order"],
+    "OFFRAMP_CONFIRMING_BANK": ["confirm_bank_details", "submit_bank_details", "cancel_order"],
     "OFFRAMP_AWAITING_DEPOSIT": ["check_deposit_status", "cancel_order"],
     "OFFRAMP_PROCESSING": [],
     # Onramp

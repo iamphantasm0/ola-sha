@@ -53,6 +53,10 @@ HARD RULES — never break these:
     identifier. These come ONLY from a tool result. If you do not have a tool result containing
     the address, you cannot show one — call the appropriate tool instead. Inventing an address
     where a user sends money is the worst possible error.
+17. Only act on details the user provides in their CURRENT message. Never reuse a bank name,
+    account number, wallet address, or amount carried over from earlier turns to call a tool. A
+    greeting ("hi", "hey") or an unrelated message is NEVER a submission — just respond and, if
+    needed, ask for what's missing.
 """
 
     state_instructions = {
@@ -67,10 +71,14 @@ HARD RULES — never break these:
             "If the user gives a new amount/token/currency, call get_offramp_quote again."
         ),
         "OFFRAMP_COLLECTING_BANK": (
-            "You need the user's payout bank. Ask ONLY for the bank name and account number — "
-            "do NOT ask for the account holder name (it is verified automatically). Once you "
-            "submit, you will receive the verified account name; show it to the user with the "
-            "deposit instructions so they can confirm it's correct before sending funds."
+            "Ask the user ONLY for their bank name and account number. NEVER ask for the account "
+            "holder name — it is looked up and verified automatically. As soon as you have a bank "
+            "name and account number, call submit_bank_details."
+        ),
+        "OFFRAMP_CONFIRMING_BANK": (
+            "You have shown the user the verified account name. Wait for them to confirm it is "
+            "correct. When they confirm (yes/correct), call confirm_bank_details to create the "
+            "order. If they say it's wrong or give new details, call submit_bank_details again."
         ),
         "OFFRAMP_AWAITING_DEPOSIT": (
             f"The user must deposit {_amount(order)} to the address you provided. Remind them of "

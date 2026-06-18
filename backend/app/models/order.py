@@ -1,7 +1,6 @@
 import enum
 
-from sqlalchemy import Column, ForeignKey, Numeric, String
-from sqlalchemy import Enum as SAEnum
+from sqlalchemy import Column, ForeignKey, Numeric, String, TypeDecorator
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -18,6 +17,7 @@ class OrderStatus(enum.Enum):
     # Offramp flow
     OFFRAMP_QUOTING = "OFFRAMP_QUOTING"
     OFFRAMP_COLLECTING_BANK = "OFFRAMP_COLLECTING_BANK"
+    OFFRAMP_CONFIRMING_BANK = "OFFRAMP_CONFIRMING_BANK"
     OFFRAMP_AWAITING_DEPOSIT = "OFFRAMP_AWAITING_DEPOSIT"
     OFFRAMP_PROCESSING = "OFFRAMP_PROCESSING"
 
@@ -30,6 +30,25 @@ class OrderStatus(enum.Enum):
 
 # Terminal states — an order in one of these is no longer "active".
 TERMINAL_STATES = {OrderStatus.SETTLED, OrderStatus.FAILED, OrderStatus.CANCELLED}
+
+
+class OrderStatusType(TypeDecorator):
+    """Stores OrderStatus as a plain VARCHAR (the enum value), not a native PG enum.
+
+    Avoids the "ALTER TYPE ... ADD VALUE" migration pain: new states just work, since
+    nothing at the DB level constrains the column to a fixed value set.
+    """
+
+    impl = String(40)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return value.value if isinstance(value, OrderStatus) else str(value)
+
+    def process_result_value(self, value, dialect):
+        return OrderStatus(value) if value is not None else None
 
 
 class Order(Base, TimestampMixin):
@@ -51,7 +70,7 @@ class Order(Base, TimestampMixin):
     registry_tx_hash = Column(String(66), nullable=True)
 
     # State
-    status = Column(SAEnum(OrderStatus), nullable=False, default=OrderStatus.IDLE)
+    status = Column(OrderStatusType, nullable=False, default=OrderStatus.IDLE)
 
     # Offramp bank details
     bank_name = Column(String(100), nullable=True)

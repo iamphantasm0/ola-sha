@@ -57,10 +57,19 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
         )
 
     if tool_name == "submit_bank_details":
+        # Name verified — ask the user to confirm before creating the order.
+        return (
+            f"I verified this account:\n\n"
+            f"Name: **{r.get('verified_account_name')}**\n"
+            f"Bank: {r.get('bank')}\n"
+            f"Account: {r.get('account_number')}\n\n"
+            "Is this correct? Reply **yes** to proceed, or send the correct bank and account number."
+        )
+
+    if tool_name == "confirm_bank_details":
         valid = f"\nThis address is valid until {r['valid_until']}." if r.get("valid_until") else ""
         return (
-            f"Account verified: **{r.get('verified_account_name')}** "
-            f"({r.get('bank')}, {r.get('account_number')}).\n\n"
+            f"Paying out to **{r.get('verified_account_name')}** ({r.get('bank')}).\n\n"
             f"To complete your sell, send exactly **{r.get('send_exactly')}** on "
             f"**{r.get('deposit_network')}** to:\n\n"
             f"`{r.get('deposit_address')}`"
