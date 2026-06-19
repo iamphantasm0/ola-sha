@@ -21,6 +21,7 @@ node_modules/
 dist/
 .next/
 out/
+*.tsbuildinfo
 npm-debug.log*
 yarn-error.log*
 
