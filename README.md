@@ -21,7 +21,7 @@ settled transaction. **0G Chain** holds a lightweight on-chain settlement log (`
 
 ## How to use
 
-**Live app: https://frontend-production-afd9.up.railway.app**
+**Live app: https://ola-sha.up.railway.app**
 
 Ola is a chat. Just tell it what you want in plain language — it figures out the rest, and
 every money decision is a one-tap button (the AI never handles your funds directly).
