@@ -119,5 +119,30 @@ the same logic in `app/services/settlement.py`:
 - **Paycrest** is mainnet-only with a $0.50 minimum — the live demo moves small real funds.
 - MVP creates DB tables on startup; swap for Alembic migrations before production.
 
+## Roadmap
+
+Ola is a Zero Cup 2026 entry (a 6-round knockout: Group Stage → Round of 32 → 16 → QF → SF → Final).
+Plan by round:
+
+**Round 1 — Group Stage (submitted):**
+- ✅ Live deployed app, real settled transaction, all three 0G services verified on-chain
+- ▢ 2–3 min demo video (intent → quote → confirm → pay → settle → read the storage hash off-chain
+  in the OlaRegistry `OrderSettled` event)
+
+**Knockout rounds — raise the bar:**
+- **Verify-a-receipt page** — public, no wallet: paste an order/hash, see the 0G Storage + Chain
+  proof resolve. Turns the "verifiable settlement" angle into something judges can touch.
+- **Deepen the 0G story** — surface on-chain stats from the contract (`totalSettlements`), store the
+  full audit trail on 0G Storage, explore 0G DA. Make Ola un-buildable without 0G.
+- **Polish** — statement panel on mobile, a standalone saved-accounts manager, error states, and the
+  minimax latency (faster model or a more intentional "thinking" state).
+- **Pitch** — sharpen the README "why this wins" + a short deck for later rounds.
+
+**Bigger bets (later rounds / if it gets competitive):**
+- **`/mywallet` — managed wallets per user** (like Sterling Concierge): Ola custodies/manages a
+  wallet for each user so they can buy/sell without bringing their own. Needs wallet infra + secure
+  key management (e.g. an embedded-wallet provider or MPC).
+- **Telegram bot** — the same state-gated agent over Telegram for reach beyond the web app.
+
 ## License
 Business Source License 1.1 — see [LICENSE](LICENSE). Converts to MIT on 2030-06-17.
