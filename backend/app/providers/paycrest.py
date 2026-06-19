@@ -244,16 +244,18 @@ class PaycrestProvider(IFiatProvider):
         refund_account_number: str = "",
         refund_account_name: str = "",
     ) -> OrderResult:
+        # amountIn="crypto": amount is the stablecoin the user wants (e.g. 1 USDC); Paycrest
+        # returns the exact fiat to pay. Refund account must be a REAL bank (Paycrest validates).
         payload = {
             "amount": str(amount),
-            "amountIn": "fiat",
+            "amountIn": "crypto",
             "source": {
                 "type": "fiat",
                 "currency": currency,
                 "refundAccount": {
-                    "institution": refund_institution or "",
-                    "accountIdentifier": refund_account_number or "",
-                    "accountName": refund_account_name or "Ola Refund",
+                    "institution": refund_institution,
+                    "accountIdentifier": refund_account_number,
+                    "accountName": refund_account_name,
                 },
             },
             "destination": {

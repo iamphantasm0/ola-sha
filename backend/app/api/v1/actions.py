@@ -33,6 +33,18 @@ def _render(tool_name: str, result: dict) -> str:
     return render_tool_reply(tool_name, json.dumps(result)) or ""
 
 
+async def _refund_bank(db: AsyncSession, user, currency: str) -> tuple[str, str, str]:
+    """Refund bank for an onramp = the user's first saved bank for that currency.
+    Returns ("", "", "") if none (create_onramp then returns a friendly error)."""
+    if not user:
+        return ("", "", "")
+    banks = await AccountRepository.list_banks(db, user.id, currency)
+    if not banks:
+        return ("", "", "")
+    b = banks[0]
+    return (b.institution_code, b.account_number, b.account_name)
+
+
 @router.post("/action")
 async def action(
     req: ActionRequest,
@@ -95,11 +107,13 @@ async def action(
         w = await AccountRepository.get_wallet(db, p.get("saved_id"), user.id)
         if not w:
             raise HTTPException(status_code=404, detail="Saved wallet not found")
-        res = await orders_flow.create_onramp(db, order, provider, req.session_id, w.address, w.network)
+        refund = await _refund_bank(db, user, order.currency)
+        res = await orders_flow.create_onramp(db, order, provider, req.session_id, w.address, w.network, *refund)
         reply = _render("submit_wallet_address", res)
 
     elif a == "submit_wallet":
-        res = await orders_flow.create_onramp(db, order, provider, req.session_id, p.get("address", ""), p.get("network", ""))
+        refund = await _refund_bank(db, user, order.currency)
+        res = await orders_flow.create_onramp(db, order, provider, req.session_id, p.get("address", ""), p.get("network", ""), *refund)
         reply = _render("submit_wallet_address", res)
 
     elif a == "check_status":

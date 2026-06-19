@@ -76,12 +76,22 @@ async def create_offramp(db: AsyncSession, order: Order, provider: IFiatProvider
 
 
 async def create_onramp(db: AsyncSession, order: Order, provider: IFiatProvider, sender_id: str,
-                        wallet_address: str, network: str) -> dict:
-    """Create the Paycrest onramp order; -> AWAITING_PAYMENT."""
+                        wallet_address: str, network: str,
+                        refund_institution: str, refund_account_number: str,
+                        refund_account_name: str) -> dict:
+    """Create the Paycrest onramp order; -> AWAITING_PAYMENT.
+
+    Paycrest requires a valid refund bank (where fiat returns if delivery fails).
+    """
+    if not refund_institution or not refund_account_number:
+        return {"error": "To buy, I need a bank account for refunds. Add one to your saved "
+                         "accounts first (it's where funds return if the transfer fails)."}
     try:
         result = await provider.create_onramp_order(
-            token=order.token, amount=float(order.output_amount or order.amount),
+            token=order.token, amount=float(order.amount),
             currency=order.currency, wallet_address=wallet_address, network=network, sender_id=sender_id,
+            refund_institution=refund_institution, refund_account_number=refund_account_number,
+            refund_account_name=refund_account_name,
         )
     except ProviderError as e:
         return {"error": f"Couldn't create the order: {e}"}

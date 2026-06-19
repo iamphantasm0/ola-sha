@@ -91,12 +91,18 @@ export function StatusPanel({ order }: { order: OrderState | null }) {
           )}
 
           <div className="mt-4 border-t border-paper-ink/10 pt-1">
-            <Row label="Type" value={order.direction === "offramp" ? "Sell · crypto → cash" : order.direction === "onramp" ? "Buy · cash → crypto" : null} />
-            <Row label="Amount" value={order.amount && order.token ? `${order.amount} ${order.token}` : null} />
-            <Row
-              label="You receive"
-              value={order.output_amount && order.currency ? `${order.output_amount.toLocaleString()} ${order.currency}` : null}
-            />
+            {(() => {
+              const onramp = order.direction === "onramp";
+              const crypto = order.amount && order.token ? `${order.amount} ${order.token}` : null;
+              const fiat = order.output_amount && order.currency ? `${order.output_amount.toLocaleString()} ${order.currency}` : null;
+              return (
+                <>
+                  <Row label="Type" value={onramp ? "Buy · cash → crypto" : order.direction === "offramp" ? "Sell · crypto → cash" : null} />
+                  <Row label={onramp ? "You receive" : "You sell"} value={crypto} />
+                  <Row label={onramp ? "You pay" : "You receive"} value={fiat} />
+                </>
+              );
+            })()}
             <Row label="Beneficiary" value={order.account_name} />
             <Row label="Account" value={order.account_number ? `${order.bank_name ?? ""} ••${order.account_number.slice(-4)}` : null} />
             <Row label="Provider ref" value={order.paycrest_order_id ? `${order.paycrest_order_id.slice(0, 10)}…` : null} />
