@@ -11,4 +11,6 @@ COPY app ./app
 COPY scripts ./scripts
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Bind IPv6 (::) — Railway private networking is IPv6-only, so other services reach
+# this at backend.railway.internal:8000. uvicorn on :: also accepts IPv4-mapped clients.
+CMD ["uvicorn", "app.main:app", "--host", "::", "--port", "8000"]
