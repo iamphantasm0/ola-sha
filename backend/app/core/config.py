@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     PAYCREST_WEBHOOK_SECRET: str = ""
     PAYCREST_REFUND_ADDRESS: str = ""
     PAYCREST_BASE_URL: str = "https://api.paycrest.io/v2"
+    # Default fiat refund account for onramp (where naira returns if a buy fails).
+    # Lets anyone buy with only a wallet — no per-user bank needed.
+    PAYCREST_ONRAMP_REFUND_INSTITUTION: str = ""
+    PAYCREST_ONRAMP_REFUND_ACCOUNT: str = ""
+    PAYCREST_ONRAMP_REFUND_NAME: str = ""
 
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://ola:changeme@db:5432/ola"

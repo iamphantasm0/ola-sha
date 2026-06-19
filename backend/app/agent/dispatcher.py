@@ -171,12 +171,7 @@ async def _submit_wallet_address(args, order, session_id, provider, db, user=Non
     Paycrest-required refund account (same path as the buttons)."""
     if not order:
         return SAFE_FALLBACK
-    refund = ("", "", "")
-    if user:
-        banks = await AccountRepository.list_banks(db, user.id, order.currency)
-        if banks:
-            b = banks[0]
-            refund = (b.institution_code, b.account_number, b.account_name)
+    refund = await orders_flow.resolve_onramp_refund(db, user, order.currency)
     return json.dumps(await orders_flow.create_onramp(
         db, order, provider, session_id, args["wallet_address"], args["network"], *refund
     ))

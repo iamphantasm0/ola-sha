@@ -34,15 +34,8 @@ def _render(tool_name: str, result: dict) -> str:
 
 
 async def _refund_bank(db: AsyncSession, user, currency: str) -> tuple[str, str, str]:
-    """Refund bank for an onramp = the user's first saved bank for that currency.
-    Returns ("", "", "") if none (create_onramp then returns a friendly error)."""
-    if not user:
-        return ("", "", "")
-    banks = await AccountRepository.list_banks(db, user.id, currency)
-    if not banks:
-        return ("", "", "")
-    b = banks[0]
-    return (b.institution_code, b.account_number, b.account_name)
+    """Refund bank for an onramp — user's saved bank, else the platform env default."""
+    return await orders_flow.resolve_onramp_refund(db, user, currency)
 
 
 @router.post("/action")

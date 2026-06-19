@@ -9,11 +9,28 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.order import Order, OrderStatus
 from app.providers.base import IFiatProvider, ProviderError
+from app.repositories.accounts import AccountRepository
 from app.repositories.orders import OrderRepository
 
 logger = logging.getLogger(__name__)
+
+
+async def resolve_onramp_refund(db: AsyncSession, user, currency: str) -> tuple[str, str, str]:
+    """Refund bank for a buy. Prefer the user's own saved bank (refund goes back to them);
+    otherwise the platform default from env, so anyone can buy with just a wallet."""
+    if user:
+        banks = await AccountRepository.list_banks(db, user.id, currency)
+        if banks:
+            b = banks[0]
+            return (b.institution_code, b.account_number, b.account_name)
+    return (
+        settings.PAYCREST_ONRAMP_REFUND_INSTITUTION,
+        settings.PAYCREST_ONRAMP_REFUND_ACCOUNT,
+        settings.PAYCREST_ONRAMP_REFUND_NAME,
+    )
 
 
 async def stage_bank(
