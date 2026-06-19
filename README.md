@@ -45,7 +45,11 @@ Create an account (email + password) to **save your bank and wallet** — next t
 tap. You can transact without an account too.
 
 ### Verify any settlement on 0G (no wallet or login needed)
-When an order settles, the receipt shows two links — both are **public explorers**:
+There's a public **[Verify page](https://ola-sha.up.railway.app/verify)** — pick any settlement and
+hit **"Verify live"**: it re-fetches the audit record from **0G Storage** and confirms the settlement
+tx on **0G Chain**, in real time, against the network itself.
+
+The receipt also shows two **public explorer** links:
 - **0G Storage record** → the immutable audit record's Merkle root on 0G Storage.
 - **0G Chain settlement** → the on-chain `logSettlement` tx on the `OlaRegistry` contract. Open its
   **Logs** tab and you'll find the storage hash embedded in the `OrderSettled` event — so one chain
