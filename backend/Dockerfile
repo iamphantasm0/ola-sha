@@ -11,6 +11,7 @@ COPY app ./app
 COPY scripts ./scripts
 
 EXPOSE 8000
-# Bind IPv6 (::) — Railway private networking is IPv6-only, so other services reach
-# this at backend.railway.internal:8000. uvicorn on :: also accepts IPv4-mapped clients.
-CMD ["uvicorn", "app.main:app", "--host", "::", "--port", "8000"]
+# Host is env-driven: defaults to :: for Railway (IPv6-only private networking), but local
+# docker-compose sets UVICORN_HOST=0.0.0.0 so IPv4 curl/healthchecks work. Shell form so the
+# env var expands.
+CMD uvicorn app.main:app --host "${UVICORN_HOST:-::}" --port 8000

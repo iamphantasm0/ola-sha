@@ -53,6 +53,22 @@ export interface SavedWallet {
   label: string | null;
 }
 
+export interface Settlement {
+  order_id: string;
+  direction: string | null;
+  amount: number | null;
+  token: string | null;
+  currency: string | null;
+  output_amount: number | null;
+  settled_at: string | null;
+  storage_hash: string | null;
+  registry_tx_hash: string | null;
+  storage_url: string | null;
+  chain_url: string | null;
+  storage_record?: Record<string, any> | null;
+  chain?: { verified: boolean; block?: number; contract?: string; events?: number };
+}
+
 // States where the backend is awaiting an external event — poll for updates.
 export const POLLING_STATES = new Set([
   "OFFRAMP_AWAITING_DEPOSIT",

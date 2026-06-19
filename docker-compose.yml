@@ -28,6 +28,8 @@ services:
   backend:
     build: ./backend
     env_file: .env
+    environment:
+      UVICORN_HOST: "0.0.0.0"   # local: bind IPv4 so host curl works (Railway uses :: default)
     ports:
       - "8000:8000"
     depends_on:

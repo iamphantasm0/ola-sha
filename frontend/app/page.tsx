@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { AuthModal } from "../components/Auth/AuthModal";
 import { ChatWindow } from "../components/Chat/ChatWindow";
@@ -22,6 +23,12 @@ export default function Home() {
           </span>
         </div>
         <div className="flex items-center gap-2.5">
+          <Link
+            href="/verify"
+            className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
+          >
+            Verify on 0G
+          </Link>
           <button
             onClick={newChat}
             className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"

@@ -1,5 +1,5 @@
 import { authHeaders } from "./auth";
-import { Action, ChatResponse, OrderState, SavedBank, SavedWallet } from "./types";
+import { Action, ChatResponse, OrderState, SavedBank, SavedWallet, Settlement } from "./types";
 
 const BASE = "/api/backend";
 
@@ -64,4 +64,12 @@ export function addWallet(address: string, network: string, label?: string) {
     method: "POST",
     body: JSON.stringify({ address, network, label }),
   });
+}
+
+// ─── Public verify ───────────────────────────────────────────────────────────
+export function verifyRecent() {
+  return req<{ settlements: Settlement[] }>("verify/recent");
+}
+export function verifyOrder(orderId: string) {
+  return req<Settlement>(`verify/order/${orderId}`);
 }
