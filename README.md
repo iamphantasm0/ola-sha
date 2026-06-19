@@ -19,6 +19,41 @@ settled transaction. **0G Chain** holds a lightweight on-chain settlement log (`
 3. **Chain** — the settlement is logged to `OlaRegistry` on 0G testnet (Galileo); the tx
    resolves on [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai).
 
+## How to use
+
+**Live app: https://frontend-production-afd9.up.railway.app**
+
+Ola is a chat. Just tell it what you want in plain language — it figures out the rest, and
+every money decision is a one-tap button (the AI never handles your funds directly).
+
+### Sell stablecoins for cash (offramp)
+1. Type something like **"sell 200 USDC for naira"**. Ola replies with a live quote.
+2. Choose where to receive the cash: a **saved bank** (one tap) or **"Use a different account"**
+   (enter bank name + account number — Ola verifies the account holder name for you).
+3. Confirm. Ola gives you a **deposit address**; send the stablecoin to it from any wallet.
+4. Ola tracks it. On settlement you get a **receipt** with a verifiable 0G record.
+
+### Buy stablecoins with cash (onramp)
+1. Type **"buy 50 USDC with naira"** → live quote.
+2. Give the **wallet address** to receive the crypto (and network — Base or Arbitrum). No bank
+   needed to buy.
+3. Ola shows a **bank account + exact amount** to transfer. Pay it.
+4. The stablecoin lands in your wallet, and you get the same 0G receipt.
+
+### Optional: sign in
+Create an account (email + password) to **save your bank and wallet** — next time they're a single
+tap. You can transact without an account too.
+
+### Verify any settlement on 0G (no wallet or login needed)
+When an order settles, the receipt shows two links — both are **public explorers**:
+- **0G Storage record** → the immutable audit record's Merkle root on 0G Storage.
+- **0G Chain settlement** → the on-chain `logSettlement` tx on the `OlaRegistry` contract. Open its
+  **Logs** tab and you'll find the storage hash embedded in the `OrderSettled` event — so one chain
+  link proves both 0G layers.
+
+**Supported:** corridors NGN · KES · UGX · TZS · MWK · BRL · tokens USDC / USDT · $1–$4,999 per
+transaction · settlement typically under 30s for NGN.
+
 ## Architecture
 
 ```
