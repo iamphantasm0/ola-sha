@@ -32,6 +32,22 @@ class PaycrestProvider(IFiatProvider):
     BASE_URL = settings.PAYCREST_BASE_URL
     DEFAULT_NETWORK = "base"  # lowest fees, natively supported
 
+    # User-facing network name -> Paycrest's identifier. USDC is only configured on
+    # base + arbitrum-one for this provider; others fall through and error gracefully.
+    NETWORK_MAP = {
+        "base": "base",
+        "arbitrum": "arbitrum-one",
+        "arbitrum-one": "arbitrum-one",
+        "polygon": "polygon",
+        "ethereum": "ethereum",
+        "bnb": "bnb-smart-chain",
+        "bsc": "bnb-smart-chain",
+    }
+
+    @classmethod
+    def _network(cls, network: str) -> str:
+        return cls.NETWORK_MAP.get((network or "").lower(), network)
+
     def __init__(self):
         self.headers = {
             "API-Key": settings.PAYCREST_API_KEY,
@@ -261,7 +277,7 @@ class PaycrestProvider(IFiatProvider):
             "destination": {
                 "type": "crypto",
                 "currency": token,
-                "recipient": {"address": wallet_address, "network": network},
+                "recipient": {"address": wallet_address, "network": self._network(network)},
             },
             "reference": f"ola-on-{uuid.uuid4().hex[:16]}",
         }

@@ -53,7 +53,7 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
         return (
             "Confirmed. ✅\n\n"
             "Now send me your **wallet address** and the **network** "
-            "(Base, Polygon, Arbitrum, Ethereum, or BNB)."
+            "(Base, Arbitrum, Polygon, or Ethereum — Base is cheapest)."
         )
 
     if tool_name == "submit_bank_details":

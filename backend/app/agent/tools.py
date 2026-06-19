@@ -6,7 +6,7 @@ and the dispatcher re-checks the same map before executing — double-gated.
 
 CURRENCIES = ["NGN", "KES", "UGX", "TZS", "MWK", "BRL"]
 TOKENS = ["USDC", "USDT"]
-NETWORKS = ["base", "polygon", "arbitrum", "ethereum", "bnb"]
+NETWORKS = ["base", "arbitrum", "polygon", "ethereum"]
 
 
 ALL_TOOLS = {

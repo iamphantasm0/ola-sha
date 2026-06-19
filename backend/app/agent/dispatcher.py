@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.tools import TOOLS_BY_STATE
 from app.models.order import Order, OrderStatus
 from app.providers.base import IFiatProvider
+from app.repositories.accounts import AccountRepository
 from app.repositories.orders import OrderRepository
+from app.services import orders_flow
 from app.services.settlement import apply_status
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,7 @@ async def dispatch_tool_call(
     session_id: str,
     provider: IFiatProvider,
     db: AsyncSession,
+    user=None,
 ) -> str:
     allowed = TOOLS_BY_STATE.get(current_state, [])
     if tool_name not in allowed:
@@ -54,12 +57,12 @@ async def dispatch_tool_call(
     if not handler:
         logger.error("Unknown tool: %s", tool_name)
         return SAFE_FALLBACK
-    return await handler(tool_args, order, session_id, provider, db)
+    return await handler(tool_args, order, session_id, provider, db, user)
 
 
 # ─── Quotes (also transition state to *_QUOTING so confirm_* becomes allowed) ──
 
-async def _get_offramp_quote(args, order, session_id, provider, db) -> str:
+async def _get_offramp_quote(args, order, session_id, provider, db, user=None) -> str:
     q = await provider.get_offramp_quote(args["token"], float(args["amount"]), args["currency"])
     # Re-quote: if there's an existing order with no Paycrest order yet, update it in place.
     if order and not order.paycrest_order_id:
@@ -82,7 +85,7 @@ async def _get_offramp_quote(args, order, session_id, provider, db) -> str:
     })
 
 
-async def _get_onramp_quote(args, order, session_id, provider, db) -> str:
+async def _get_onramp_quote(args, order, session_id, provider, db, user=None) -> str:
     q = await provider.get_onramp_quote(args["token"], float(args["amount"]), args["currency"])
     if order and not order.paycrest_order_id:
         await OrderRepository.update(
@@ -106,14 +109,14 @@ async def _get_onramp_quote(args, order, session_id, provider, db) -> str:
 
 # ─── Confirmations (move to COLLECTING_*) ──────────────────────────────────────
 
-async def _confirm_offramp(args, order, session_id, provider, db) -> str:
+async def _confirm_offramp(args, order, session_id, provider, db, user=None) -> str:
     if not order:
         return SAFE_FALLBACK
     await OrderRepository.set_status(db, order, OrderStatus.OFFRAMP_COLLECTING_BANK)
     return json.dumps({"ok": True, "next": "collect_bank_details"})
 
 
-async def _confirm_onramp(args, order, session_id, provider, db) -> str:
+async def _confirm_onramp(args, order, session_id, provider, db, user=None) -> str:
     if not order:
         return SAFE_FALLBACK
     await OrderRepository.set_status(db, order, OrderStatus.ONRAMP_COLLECTING_WALLET)
@@ -122,7 +125,7 @@ async def _confirm_onramp(args, order, session_id, provider, db) -> str:
 
 # ─── Submissions (the ONLY place Paycrest orders are created) ──────────────────
 
-async def _submit_bank_details(args, order, session_id, provider, db) -> str:
+async def _submit_bank_details(args, order, session_id, provider, db, user=None) -> str:
     """Resolve the bank, fetch + verify the account name, and store it — but do NOT
     create the order yet. The user must confirm the verified name first."""
     if not order:
@@ -156,63 +159,32 @@ async def _submit_bank_details(args, order, session_id, provider, db) -> str:
     })
 
 
-async def _confirm_bank_details(args, order, session_id, provider, db) -> str:
-    """User confirmed the verified name — create the Paycrest order and return the
-    deposit address (rendered deterministically by the presenter)."""
+async def _confirm_bank_details(args, order, session_id, provider, db, user=None) -> str:
+    """User confirmed the verified name — create the Paycrest order via the shared flow."""
     if not order or not order.institution_code:
         return SAFE_FALLBACK
-    result = await provider.create_offramp_order(
-        token=order.token, amount=float(order.amount), currency=order.currency,
-        institution_code=order.institution_code, account_number=order.account_number,
-        account_name=order.account_name, sender_id=session_id,
-    )
-    pi = result.payment_instructions
-    await OrderRepository.update(
-        db, order,
-        paycrest_order_id=result.provider_order_id,
-        deposit_address=pi.deposit_address,
-        status=OrderStatus.OFFRAMP_AWAITING_DEPOSIT,
-    )
-    return json.dumps({
-        "verified_account_name": order.account_name,
-        "bank": order.bank_name,
-        "account_number": order.account_number,
-        "deposit_address": pi.deposit_address,
-        "deposit_token": pi.deposit_token,
-        "deposit_network": pi.deposit_network,
-        "valid_until": pi.valid_until,
-        "send_exactly": f"{order.amount} {order.token}",
-    })
+    return json.dumps(await orders_flow.create_offramp(db, order, provider, session_id))
 
 
-async def _submit_wallet_address(args, order, session_id, provider, db) -> str:
+async def _submit_wallet_address(args, order, session_id, provider, db, user=None) -> str:
+    """Create the onramp order. Uses the user's saved bank for that currency as the
+    Paycrest-required refund account (same path as the buttons)."""
     if not order:
         return SAFE_FALLBACK
-    result = await provider.create_onramp_order(
-        token=order.token, amount=float(order.output_amount or order.amount),
-        currency=order.currency, wallet_address=args["wallet_address"],
-        network=args["network"], sender_id=session_id,
-    )
-    pi = result.payment_instructions
-    await OrderRepository.update(
-        db, order,
-        wallet_address=args["wallet_address"], network=args["network"],
-        paycrest_order_id=result.provider_order_id,
-        status=OrderStatus.ONRAMP_AWAITING_PAYMENT,
-    )
-    return json.dumps({
-        "pay_to_bank": pi.bank_name,
-        "account_number": pi.account_number,
-        "account_name": pi.account_name,
-        "amount_to_transfer": pi.amount_to_transfer,
-        "currency": pi.transfer_currency,
-        "valid_until": pi.valid_until,
-    })
+    refund = ("", "", "")
+    if user:
+        banks = await AccountRepository.list_banks(db, user.id, order.currency)
+        if banks:
+            b = banks[0]
+            refund = (b.institution_code, b.account_number, b.account_name)
+    return json.dumps(await orders_flow.create_onramp(
+        db, order, provider, session_id, args["wallet_address"], args["network"], *refund
+    ))
 
 
 # ─── Status / cancel / receipt ─────────────────────────────────────────────────
 
-async def _check_status(args, order, session_id, provider, db) -> str:
+async def _check_status(args, order, session_id, provider, db, user=None) -> str:
     if not order or not order.paycrest_order_id:
         return json.dumps({"status": "no_order"})
     # Live pull from Paycrest, then apply the same settlement logic the poller uses —
@@ -226,14 +198,14 @@ async def _check_status(args, order, session_id, provider, db) -> str:
     })
 
 
-async def _cancel_order(args, order, session_id, provider, db) -> str:
+async def _cancel_order(args, order, session_id, provider, db, user=None) -> str:
     if not order:
         return json.dumps({"ok": True})
     await OrderRepository.set_status(db, order, OrderStatus.CANCELLED)
     return json.dumps({"ok": True, "cancelled": True})
 
 
-async def _get_receipt(args, order, session_id, provider, db) -> str:
+async def _get_receipt(args, order, session_id, provider, db, user=None) -> str:
     if not order:
         return json.dumps({"error": "no order"})
     return json.dumps({

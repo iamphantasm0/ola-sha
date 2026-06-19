@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Action } from "../../lib/types";
 
-const NETWORKS = ["base", "polygon", "arbitrum", "ethereum", "bnb"];
+const NETWORKS = ["base", "arbitrum", "polygon", "ethereum"];
 const inputCls =
   "w-full rounded-lg border border-edge bg-ink px-3 py-2 text-sm text-text outline-none focus:border-gold/50 placeholder:text-muted/60";
 

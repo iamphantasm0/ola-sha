@@ -95,8 +95,11 @@ HARD RULES — never break these:
             "amount/token/currency, call get_onramp_quote again."
         ),
         "ONRAMP_COLLECTING_WALLET": (
-            "Collect the user's wallet address and preferred network "
-            "(Base, Polygon, Arbitrum, Ethereum, or BNB Chain)."
+            "You need the user's wallet address and network. As soon as the user gives both "
+            "(e.g. 'arb 0x...' means network=arbitrum, address=0x...), call submit_wallet_address "
+            "immediately with what they said. Do NOT re-confirm, do NOT second-guess which network "
+            "the address 'looks like' — use the network the user stated. Only ask again if the "
+            "address or network is actually missing."
         ),
         "ONRAMP_AWAITING_PAYMENT": (
             "The user must send local currency to the bank account you provided. Check status "

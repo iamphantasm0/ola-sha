@@ -100,6 +100,7 @@ async def chat(
             session_id=req.session_id,
             provider=provider,
             db=db,
+            user=user,
         )
 
         # Money-critical data (addresses, accounts, amounts) is rendered deterministically
