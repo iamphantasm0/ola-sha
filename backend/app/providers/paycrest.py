@@ -107,43 +107,51 @@ class PaycrestProvider(IFiatProvider):
             return resp.json()["data"]
 
     async def market_summary(self, token: Optional[str], currency: Optional[str]) -> dict:
-        """Distil /markets into trust signals the agent can reason over: network stats
-        always, plus corridor detail (rate, limits, liquidity, success) when token+fiat given."""
+        """Concise market view: the best rate per corridor (token→fiat) with the networks
+        it's available on, plus a one-line network trust signal. Filters by token/currency
+        if given."""
         d = await self.get_markets()
         agg = d.get("aggregates", {})
-        out = {
+        groups: dict = {}
+        for b in d.get("book", []):
+            t, f = b.get("token"), b.get("fiat")
+            if not t or not f:
+                continue
+            if t not in ("USDC", "USDT"):  # we only trade these two
+                continue
+            if token and t != token:
+                continue
+            if currency and f != currency:
+                continue
+            g = groups.setdefault((t, f), {"token": t, "currency": f, "rate": 0.0, "nets": {}, "liq": 0.0})
+            try:
+                g["rate"] = max(g["rate"], float(b.get("rate") or 0))
+            except (TypeError, ValueError):
+                pass
+            liq = float(b.get("balanceUsd") or 0)
+            g["liq"] += liq
+            net = b.get("network")
+            if net:
+                g["nets"][net] = g["nets"].get(net, 0.0) + liq
+
+        rates = []
+        for g in groups.values():
+            best_nets = sorted(g["nets"], key=lambda n: -g["nets"][n])[:3]
+            rates.append({
+                "token": g["token"], "currency": g["currency"],
+                "rate": round(g["rate"], 2), "networks": best_nets,
+                "liquidity_usd": round(g["liq"], 2),
+            })
+        rates.sort(key=lambda r: -r["liquidity_usd"])
+        return {
+            "rates": rates[:6],
             "network": {
-                "settled_all": agg.get("settledTxns", {}).get("all"),
-                "settled_24h": agg.get("settledTxns", {}).get("24h"),
-                "success_pct_24h": agg.get("networkSuccessPercent", {}).get("24h"),
-                "median_delivery_secs_24h": agg.get("medianDeliverySecs", {}).get("24h"),
+                "success_pct": agg.get("networkSuccessPercent", {}).get("24h"),
+                "median_delivery_secs": agg.get("medianDeliverySecs", {}).get("24h"),
                 "live_liquidity_usd": agg.get("liveLiquidityUsd"),
-                "corridors": agg.get("corridors"),
-                "tokens": agg.get("tokens"),
-                "networks": agg.get("networks"),
-            }
+                "settled_all": agg.get("settledTxns", {}).get("all"),
+            },
         }
-        if token and currency:
-            book = [
-                b for b in d.get("book", [])
-                if b.get("token") == token and b.get("fiat") == currency
-            ]
-            if book:
-                rates = [float(b["rate"]) for b in book if b.get("rate")]
-                out["corridor"] = {
-                    "token": token,
-                    "currency": currency,
-                    "rate": max(rates) if rates else None,
-                    "min": min(float(b["min"]) for b in book if b.get("min")),
-                    "max": max(float(b["max"]) for b in book if b.get("max")),
-                    "liquidity_usd": round(sum(float(b.get("balanceUsd", 0) or 0) for b in book), 2),
-                    "success_pct": max(float(b.get("successPercent", 0) or 0) for b in book),
-                    "networks": sorted({b.get("network") for b in book if b.get("network")}),
-                    "providers": len(book),
-                }
-            else:
-                out["corridor"] = {"token": token, "currency": currency, "available": False}
-        return out
 
     # ─── Institutions + account verification ─────────────────────────────────
 

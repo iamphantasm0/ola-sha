@@ -1,4 +1,38 @@
+import { Fragment, ReactNode } from "react";
 import { ChatMessage } from "../../lib/types";
+
+// Minimal inline markdown: **bold**, *italic*, `code`. Newlines are preserved by
+// whitespace-pre-wrap on the container, so the deterministic presenter's line breaks
+// and "- " bullets render as written.
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
+
+function renderInline(text: string): ReactNode {
+  const parts = text.split(INLINE);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={i} className="rounded bg-black/30 px-1 py-0.5 font-mono text-[0.85em] text-gold">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*")) {
+      return (
+        <em key={i} className="italic">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    return <Fragment key={i}>{part}</Fragment>;
+  });
+}
 
 export function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -16,7 +50,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
             Ola
           </span>
         )}
-        {message.content}
+        {isUser ? message.content : renderInline(message.content)}
       </div>
     </div>
   );

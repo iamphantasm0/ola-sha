@@ -107,28 +107,33 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
                 return f"{int(f):,}" if f == int(f) else f"{f:,.2f}"
             except (TypeError, ValueError):
                 return v
-        lines = ["Live market data:"]
-        c = r.get("corridor")
-        if c and c.get("available") is not False:
-            lines += [
-                f"\n**{c.get('token')} → {c.get('currency')}**",
-                f"- Rate: ~{num(c.get('rate'))} {c.get('currency')} per {c.get('token')}",
-                f"- Limits: {num(c.get('min'))}–{num(c.get('max'))} {c.get('token')}",
-                f"- Success rate: {c.get('success_pct')}%",
-                f"- Liquidity: ${num(c.get('liquidity_usd'))} across {c.get('providers')} providers",
-                f"- Networks: {', '.join(c.get('networks') or [])}",
-            ]
-        elif c:
-            lines.append(f"\n{c.get('token')} → {c.get('currency')}: no live liquidity right now.")
+        rates = r.get("rates") or []
+        if not rates:
+            return "No corridors have live liquidity right now — try again in a moment."
+        lines = ["**Best rates right now:**"]
+        for x in rates:
+            nets = ", ".join(x.get("networks") or []) or "—"
+            lines.append(f"- {x.get('token')} → {x.get('currency')}: **{num(x.get('rate'))} {x.get('currency')}** ({nets})")
         n = r.get("network", {})
-        lines += [
-            "\n**Network (Paycrest)**",
-            f"- {num(n.get('settled_all'))} settlements all-time ({n.get('settled_24h')} in 24h)",
-            f"- {n.get('success_pct_24h')}% success · ~{n.get('median_delivery_secs_24h')}s median delivery",
-            f"- ${num(n.get('live_liquidity_usd'))} live liquidity · {n.get('corridors')} corridors · "
-            f"{n.get('tokens')} tokens · {n.get('networks')} networks",
-        ]
+        if n.get("success_pct"):
+            lines.append(
+                f"\nNetwork: {n.get('success_pct')}% success · ~{n.get('median_delivery_secs')}s settlement."
+            )
         return "\n".join(lines)
+
+    if tool_name == "get_help":
+        return (
+            "Here's what I can do:\n\n"
+            "- **Sell** stablecoins for cash — e.g. *\"sell 200 USDC for naira\"*. I quote it, you pick "
+            "a bank, send the crypto, and I settle the cash to you.\n"
+            "- **Buy** stablecoins with cash — e.g. *\"buy 50 USDT with shillings\"*. I quote it, you "
+            "give a wallet, pay the bank I show you, and the crypto lands in your wallet.\n"
+            "- **Market info** — ask *\"what are the best rates?\"* and I'll pull live data.\n"
+            "- **Proof** — every settlement is notarized on **0G**; you get a receipt with on-chain "
+            "proof anyone can verify.\n\n"
+            "Corridors: NGN, KES, UGX, TZS, MWK, BRL · Tokens: USDC, USDT · $1–$4,999 per transaction.\n\n"
+            "Just tell me what you'd like to do."
+        )
 
     if tool_name == "get_receipt":
         lines = ["Here's your receipt:", f"- Status: {r.get('status')}"]

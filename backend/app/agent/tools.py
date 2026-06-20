@@ -212,6 +212,17 @@ ALL_TOOLS = {
             },
         },
     },
+    "get_help": {
+        "type": "function",
+        "function": {
+            "name": "get_help",
+            "description": (
+                "Explain what Ola can do. Call when the user asks for help, asks what you can "
+                "do / how this works, or seems unsure how to start."
+            ),
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
 }
 
 
@@ -240,3 +251,8 @@ TOOLS_BY_STATE = {
     "FAILED": ["get_receipt", "get_offramp_quote", "get_onramp_quote", "get_market_insights"],
     "CANCELLED": ["get_offramp_quote", "get_onramp_quote", "get_market_insights"],
 }
+
+# "help" is always available except while the backend is mid-settlement (AI calls nothing there).
+for _state, _tools in TOOLS_BY_STATE.items():
+    if _state not in ("OFFRAMP_PROCESSING", "ONRAMP_PROCESSING") and "get_help" not in _tools:
+        _tools.append("get_help")
