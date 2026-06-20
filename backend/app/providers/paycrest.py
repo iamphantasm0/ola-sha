@@ -97,6 +97,54 @@ class PaycrestProvider(IFiatProvider):
             resp.raise_for_status()
             return resp.json()["data"]
 
+    # ─── Market data (public) ────────────────────────────────────────────────
+
+    async def get_markets(self) -> dict:
+        """GET /v2/markets — network-wide aggregates + per-provider rate book."""
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(f"{self.BASE_URL}/markets")
+            resp.raise_for_status()
+            return resp.json()["data"]
+
+    async def market_summary(self, token: Optional[str], currency: Optional[str]) -> dict:
+        """Distil /markets into trust signals the agent can reason over: network stats
+        always, plus corridor detail (rate, limits, liquidity, success) when token+fiat given."""
+        d = await self.get_markets()
+        agg = d.get("aggregates", {})
+        out = {
+            "network": {
+                "settled_all": agg.get("settledTxns", {}).get("all"),
+                "settled_24h": agg.get("settledTxns", {}).get("24h"),
+                "success_pct_24h": agg.get("networkSuccessPercent", {}).get("24h"),
+                "median_delivery_secs_24h": agg.get("medianDeliverySecs", {}).get("24h"),
+                "live_liquidity_usd": agg.get("liveLiquidityUsd"),
+                "corridors": agg.get("corridors"),
+                "tokens": agg.get("tokens"),
+                "networks": agg.get("networks"),
+            }
+        }
+        if token and currency:
+            book = [
+                b for b in d.get("book", [])
+                if b.get("token") == token and b.get("fiat") == currency
+            ]
+            if book:
+                rates = [float(b["rate"]) for b in book if b.get("rate")]
+                out["corridor"] = {
+                    "token": token,
+                    "currency": currency,
+                    "rate": max(rates) if rates else None,
+                    "min": min(float(b["min"]) for b in book if b.get("min")),
+                    "max": max(float(b["max"]) for b in book if b.get("max")),
+                    "liquidity_usd": round(sum(float(b.get("balanceUsd", 0) or 0) for b in book), 2),
+                    "success_pct": max(float(b.get("successPercent", 0) or 0) for b in book),
+                    "networks": sorted({b.get("network") for b in book if b.get("network")}),
+                    "providers": len(book),
+                }
+            else:
+                out["corridor"] = {"token": token, "currency": currency, "available": False}
+        return out
+
     # ─── Institutions + account verification ─────────────────────────────────
 
     async def get_institutions(self, currency: str) -> list[dict]:

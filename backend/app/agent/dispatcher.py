@@ -52,6 +52,7 @@ async def dispatch_tool_call(
         "check_payment_status": _check_status,
         "cancel_order": _cancel_order,
         "get_receipt": _get_receipt,
+        "get_market_insights": _get_market_insights,
     }
     handler = handlers.get(tool_name)
     if not handler:
@@ -191,6 +192,11 @@ async def _check_status(args, order, session_id, provider, db, user=None) -> str
         "order_status": order.status.value,
         "action": action,
     })
+
+
+async def _get_market_insights(args, order, session_id, provider, db, user=None) -> str:
+    summary = await provider.market_summary(args.get("token"), args.get("currency"))
+    return json.dumps(summary)
 
 
 async def _cancel_order(args, order, session_id, provider, db, user=None) -> str:

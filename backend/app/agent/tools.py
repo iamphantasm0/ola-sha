@@ -190,15 +190,38 @@ ALL_TOOLS = {
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
+    "get_market_insights": {
+        "type": "function",
+        "function": {
+            "name": "get_market_insights",
+            "description": (
+                "Get LIVE market data to advise the user: exchange rate, success rate, "
+                "settlement speed, min/max limits, and available liquidity for a corridor, plus "
+                "network-wide trust stats (total settlements, success %, median delivery). Call "
+                "when the user asks about rates, reliability, speed, limits, liquidity, the best "
+                "option, or how busy/trustworthy the network is. Pass token+currency for a "
+                "specific corridor, or omit both for a network overview."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "token": {"type": "string", "enum": TOKENS, "description": "Stablecoin (optional)."},
+                    "currency": {"type": "string", "enum": CURRENCIES, "description": "Local currency (optional)."},
+                },
+                "required": [],
+            },
+        },
+    },
 }
 
 
 TOOLS_BY_STATE = {
-    "IDLE": ["get_offramp_quote", "get_onramp_quote"],
+    "IDLE": ["get_offramp_quote", "get_onramp_quote", "get_market_insights"],
     # Offramp — submit_bank_details is allowed from QUOTING too: minimax tends to collapse the
     # confirm step, and if the submit tool isn't available it will hallucinate a deposit address.
     "OFFRAMP_QUOTING": [
-        "confirm_offramp", "submit_bank_details", "get_offramp_quote", "get_onramp_quote", "cancel_order",
+        "confirm_offramp", "submit_bank_details", "get_offramp_quote", "get_onramp_quote",
+        "get_market_insights", "cancel_order",
     ],
     "OFFRAMP_COLLECTING_BANK": ["submit_bank_details", "get_offramp_quote", "cancel_order"],
     "OFFRAMP_CONFIRMING_BANK": ["confirm_bank_details", "submit_bank_details", "cancel_order"],
@@ -206,13 +229,14 @@ TOOLS_BY_STATE = {
     "OFFRAMP_PROCESSING": [],
     # Onramp
     "ONRAMP_QUOTING": [
-        "confirm_onramp", "submit_wallet_address", "get_onramp_quote", "get_offramp_quote", "cancel_order",
+        "confirm_onramp", "submit_wallet_address", "get_onramp_quote", "get_offramp_quote",
+        "get_market_insights", "cancel_order",
     ],
     "ONRAMP_COLLECTING_WALLET": ["submit_wallet_address", "get_onramp_quote", "cancel_order"],
     "ONRAMP_AWAITING_PAYMENT": ["check_payment_status", "cancel_order"],
     "ONRAMP_PROCESSING": [],
     # Terminal
-    "SETTLED": ["get_receipt", "get_offramp_quote", "get_onramp_quote"],
-    "FAILED": ["get_receipt", "get_offramp_quote", "get_onramp_quote"],
-    "CANCELLED": ["get_offramp_quote", "get_onramp_quote"],
+    "SETTLED": ["get_receipt", "get_offramp_quote", "get_onramp_quote", "get_market_insights"],
+    "FAILED": ["get_receipt", "get_offramp_quote", "get_onramp_quote", "get_market_insights"],
+    "CANCELLED": ["get_offramp_quote", "get_onramp_quote", "get_market_insights"],
 }

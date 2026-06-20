@@ -100,6 +100,36 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
     if tool_name == "cancel_order":
         return "Your order has been cancelled. Want to start a new buy or sell?"
 
+    if tool_name == "get_market_insights":
+        def num(v):
+            try:
+                f = float(v)
+                return f"{int(f):,}" if f == int(f) else f"{f:,.2f}"
+            except (TypeError, ValueError):
+                return v
+        lines = ["Live market data:"]
+        c = r.get("corridor")
+        if c and c.get("available") is not False:
+            lines += [
+                f"\n**{c.get('token')} → {c.get('currency')}**",
+                f"- Rate: ~{num(c.get('rate'))} {c.get('currency')} per {c.get('token')}",
+                f"- Limits: {num(c.get('min'))}–{num(c.get('max'))} {c.get('token')}",
+                f"- Success rate: {c.get('success_pct')}%",
+                f"- Liquidity: ${num(c.get('liquidity_usd'))} across {c.get('providers')} providers",
+                f"- Networks: {', '.join(c.get('networks') or [])}",
+            ]
+        elif c:
+            lines.append(f"\n{c.get('token')} → {c.get('currency')}: no live liquidity right now.")
+        n = r.get("network", {})
+        lines += [
+            "\n**Network (Paycrest)**",
+            f"- {num(n.get('settled_all'))} settlements all-time ({n.get('settled_24h')} in 24h)",
+            f"- {n.get('success_pct_24h')}% success · ~{n.get('median_delivery_secs_24h')}s median delivery",
+            f"- ${num(n.get('live_liquidity_usd'))} live liquidity · {n.get('corridors')} corridors · "
+            f"{n.get('tokens')} tokens · {n.get('networks')} networks",
+        ]
+        return "\n".join(lines)
+
     if tool_name == "get_receipt":
         lines = ["Here's your receipt:", f"- Status: {r.get('status')}"]
         if r.get("amount"):
