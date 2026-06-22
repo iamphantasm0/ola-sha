@@ -1,72 +1,26 @@
 """
-Memory service — Cognee integration for Ola (WeMakeDevs × Cognee hackathon).
+Memory service — thin HTTP client to the memory-sidecar (Cognee), for Ola's per-user memory
+across sessions (WeMakeDevs × Cognee hackathon).
 
-Gives the agent persistent, per-user memory across sessions. Validated end-to-end on
-2026-06-22 (spike) with a **fully GPT-free** stack:
-  - LLM (entity/relationship extraction + recall synthesis): minimax-m3 on the 0G Compute
-    router (OpenAI-compatible), reused from Ola's existing OG_COMPUTE_* settings.
-  - Structured output: **BAML** (`STRUCTURED_OUTPUT_FRAMEWORK=baml`). Instructor's strict
-    tool-calling mode rejects minimax (a reasoning model returns prose + <think>, not a clean
-    tool call); BAML parses structure out of the text and works.
-  - Embeddings: **local fastembed** (`BAAI/bge-small-en-v1.5`, 384-dim) — no API, no key.
-  - Stores: file-based defaults (SQLite + LanceDB + Kuzu/Ladybug) under SYSTEM/DATA roots.
+Cognee + its heavy/newer deps live in a SEPARATE service (memory-sidecar) so they never touch
+the backend's dependency set (mirrors the storage-sidecar). This module just calls it over the
+internal network. The validated, GPT-free config (minimax-m3 on 0G + BAML + local fastembed)
+lives in memory-sidecar/app/main.py.
 
-ARCHITECTURE BOUNDARY (do not violate): Cognee NEVER touches the state-gated tool firewall.
-It only feeds read-only context into the system prompt — memory informs what Ola *says*, never
-what Ola *does*. Every function degrades gracefully: on any failure, a missing `cognee`
-install, or a brand-new user, the chat flow continues unaffected.
-
-Docs: https://docs.cognee.ai
+ARCHITECTURE BOUNDARY (do not violate): memory NEVER touches the state-gated tool firewall. It
+only feeds read-only context into the system prompt. Every call degrades gracefully — if the
+sidecar is unreachable or slow, recall returns "" and writes no-op, so the chat flow is unaffected.
 """
 import logging
-import os
+
+import httpx
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# --- These MUST be set in os.environ BEFORE `import cognee` (Cognee reads them at import). ---
-os.environ.setdefault("TELEMETRY_DISABLED", "true")
-os.environ.setdefault("COGNEE_LOG_FILE", "false")
-os.environ.setdefault("COGNEE_SKIP_CONNECTION_TEST", "true")  # minimax is slow to first token
-# Instructor can't parse minimax's reasoning output → use BAML (validated 2026-06-22).
-os.environ.setdefault("STRUCTURED_OUTPUT_FRAMEWORK", "baml")
-# File-based stores. On Railway, mount a volume at both paths (they must persist together).
-os.environ.setdefault("SYSTEM_ROOT_DIRECTORY", os.getenv("COGNEE_SYSTEM_ROOT", "/app/.cognee_system"))
-os.environ.setdefault("DATA_ROOT_DIRECTORY", os.getenv("COGNEE_DATA_ROOT", "/app/.data_storage"))
-# BAML drives structured extraction on the SAME 0G endpoint Ola already uses.
-os.environ.setdefault("BAML_LLM_PROVIDER", "openai-generic")
-os.environ["BAML_LLM_ENDPOINT"] = settings.OG_COMPUTE_BASE_URL
-os.environ["BAML_LLM_API_KEY"] = settings.OG_COMPUTE_API_KEY
-os.environ["BAML_LLM_MODEL"] = settings.OG_COMPUTE_MODEL
-
-try:
-    import cognee  # noqa: E402  (must follow the env setup above)
-except Exception as e:  # noqa: BLE001 — app must boot even if cognee isn't installed (e.g. local dev)
-    cognee = None
-    logger.warning("cognee unavailable — memory layer disabled: %s", e)
-
-_configured = False
-
-
-def _configure() -> bool:
-    """Apply runtime config once. Returns False if cognee isn't available."""
-    global _configured
-    if cognee is None:
-        return False
-    if _configured:
-        return True
-    # litellm routes by model prefix: 'openai/<model>' + custom api_base = OpenAI-compatible.
-    cognee.config.set("llm_provider", "custom")
-    cognee.config.set("llm_model", f"openai/{settings.OG_COMPUTE_MODEL}")
-    cognee.config.set("llm_endpoint", settings.OG_COMPUTE_BASE_URL)
-    cognee.config.set("llm_api_key", settings.OG_COMPUTE_API_KEY)
-    cognee.config.set("embedding_provider", "fastembed")
-    cognee.config.set("embedding_model", "BAAI/bge-small-en-v1.5")
-    cognee.config.set("embedding_dimensions", 384)
-    cognee.config.set("vector_db_provider", "lancedb")
-    _configured = True
-    return True
+_BASE = settings.MEMORY_SIDECAR_URL.rstrip("/")
+_HEADERS = {"x-sidecar-token": settings.SIDECAR_AUTH_TOKEN}
 
 
 # --- dataset keys: stable per identity. Logged-in users get durable cross-session memory;
@@ -83,46 +37,43 @@ def dataset_for_order(order) -> str:
     return f"ola-anon-{order.session_id}"
 
 
+async def _post(path: str, payload: dict, timeout: float) -> dict:
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        resp = await client.post(f"{_BASE}{path}", json=payload, headers=_HEADERS)
+        resp.raise_for_status()
+        return resp.json()
+
+
 async def remember_fact(dataset: str, fact: str) -> None:
-    """Store a structured fact in a memory graph. PII must already be masked by the caller.
-    Never raises — memory must never break the core flow."""
-    if not _configure():
-        return
+    """Store a structured fact. PII must already be masked by the caller. Never raises."""
     try:
-        await cognee.remember(fact, dataset_name=dataset)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("cognee.remember failed (ignored): %s", e)
+        await _post("/remember", {"dataset": dataset, "fact": fact}, timeout=60.0)
+    except Exception as e:  # noqa: BLE001 — memory must never break the core flow
+        logger.warning("memory.remember failed (ignored): %s", e)
 
 
 async def recall_context(dataset: str, query: str, limit: int = 5) -> str:
-    """Pull relevant memory for the current turn, formatted for the system prompt. Returns ""
-    for a new/anonymous user, a missing cognee, or any failure — a safe, chat-unchanged default."""
-    if not _configure():
-        return ""
+    """Pull relevant memory for the current turn, formatted for the system prompt. Returns "" for
+    a new/anonymous user or if the sidecar is slow/unavailable — a safe, chat-unchanged default."""
     try:
-        results = await cognee.recall(query_text=query, datasets=[dataset])
+        data = await _post("/recall", {"dataset": dataset, "query": query, "limit": limit}, timeout=30.0)
+        return data.get("context", "")
     except Exception as e:  # noqa: BLE001
-        logger.warning("cognee.recall failed (ignored): %s", e)
+        logger.warning("memory.recall failed (ignored): %s", e)
         return ""
-    facts = [getattr(r, "text", "") for r in (results or []) if getattr(r, "text", "")]
-    return "\n".join(f"- {f}" for f in facts[:limit])
 
 
 async def improve_memory(dataset: str) -> None:
-    """Run memify — prune stale nodes, reweight by usage. Call periodically (every Nth settle)."""
-    if not _configure():
-        return
+    """Run memify — prune stale nodes, reweight by usage. Periodic (every Nth settle)."""
     try:
-        await cognee.improve(dataset=dataset)
+        await _post("/improve", {"dataset": dataset}, timeout=120.0)
     except Exception as e:  # noqa: BLE001
-        logger.warning("cognee.improve failed (ignored): %s", e)
+        logger.warning("memory.improve failed (ignored): %s", e)
 
 
 async def forget(dataset: str) -> None:
     """Right-to-erasure (NDPR/GDPR) — wipe this identity's entire memory graph."""
-    if not _configure():
-        return
     try:
-        await cognee.forget(dataset=dataset)
+        await _post("/forget", {"dataset": dataset}, timeout=60.0)
     except Exception as e:  # noqa: BLE001
-        logger.warning("cognee.forget failed (ignored): %s", e)
+        logger.warning("memory.forget failed (ignored): %s", e)

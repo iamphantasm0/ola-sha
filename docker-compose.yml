@@ -25,23 +25,35 @@ services:
       - "3001"
     restart: unless-stopped
 
-  backend:
-    build: ./backend
-    env_file: .env
+  memory-sidecar:
+    build: ./memory-sidecar
+    env_file: .env   # needs OG_COMPUTE_* (extraction) + SIDECAR_AUTH_TOKEN (auth)
     environment:
-      UVICORN_HOST: "0.0.0.0"   # local: bind IPv4 so host curl works (Railway uses :: default)
-      # Cognee memory: file-based graph/vector/relational stores live here (persist across restarts).
+      UVICORN_HOST: "0.0.0.0"
+      # File-based graph/vector/relational stores live here (persist across restarts).
       COGNEE_SYSTEM_ROOT: /app/.cognee_system
       COGNEE_DATA_ROOT: /app/.data_storage
     volumes:
       - cognee_data:/app/.cognee_system
       - cognee_files:/app/.data_storage
+    # No host port publish — only the backend reaches it via the compose network.
+    expose:
+      - "3002"
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      UVICORN_HOST: "0.0.0.0"   # local: bind IPv4 so host curl works (Railway uses :: default)
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
       storage-sidecar:
+        condition: service_started
+      memory-sidecar:
         condition: service_started
     restart: unless-stopped
 
