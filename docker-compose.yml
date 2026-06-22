@@ -30,6 +30,12 @@ services:
     env_file: .env
     environment:
       UVICORN_HOST: "0.0.0.0"   # local: bind IPv4 so host curl works (Railway uses :: default)
+      # Cognee memory: file-based graph/vector/relational stores live here (persist across restarts).
+      COGNEE_SYSTEM_ROOT: /app/.cognee_system
+      COGNEE_DATA_ROOT: /app/.data_storage
+    volumes:
+      - cognee_data:/app/.cognee_system
+      - cognee_files:/app/.data_storage
     ports:
       - "8000:8000"
     depends_on:
@@ -53,3 +59,5 @@ services:
 
 volumes:
   postgres_data:
+  cognee_data:    # Cognee graph + vector + relational stores (.cognee_system)
+  cognee_files:   # Cognee ingested source files (.data_storage)

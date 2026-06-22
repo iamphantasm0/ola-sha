@@ -6,6 +6,7 @@ status (whether pushed by webhook or pulled by poll) is handled identically. The
 safe to call this more than once for the same order.
 """
 
+import asyncio
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import AsyncSessionLocal
 from app.models.order import OrderStatus
 from app.repositories.orders import OrderRepository
+from app.services.memory import dataset_for_order, improve_memory, remember_fact
 from app.services.notifications import push_status_update
 from app.services.registry import log_to_registry
 from app.services.storage import store_transaction_record
@@ -23,6 +25,47 @@ SETTLED = "settled"
 VALIDATED = "validated"
 PENDING = "pending"
 FAILED_STATUSES = {"refunded", "expired"}
+
+# Keep refs to fire-and-forget memory writes so they aren't garbage-collected mid-flight.
+_memory_tasks: set = set()
+_settle_count = 0  # drives periodic improve()/memify (every Nth settlement)
+_IMPROVE_EVERY = 3
+
+
+def _spawn(coro) -> None:
+    """Fire-and-forget on the running loop, holding a ref so it isn't GC'd. Never blocks."""
+    try:
+        task = asyncio.create_task(coro)
+        _memory_tasks.add(task)
+        task.add_done_callback(_memory_tasks.discard)
+    except RuntimeError:  # no running loop — skip silently
+        pass
+
+
+def _settlement_fact(order, direction: str) -> str:
+    """A masked, pattern-level fact for the memory graph — never raw PII (no full account number,
+    account holder name, or wallet address)."""
+    amt = f"{float(order.amount):g}" if order.amount else "?"
+    fact = f"User completed a {direction} of {amt} {order.token} for {order.currency}."
+    if direction == "offramp" and order.account_number:
+        fact += f" Settled to {order.bank_name or 'their bank'} (account ending {order.account_number[-4:]})."
+        fact += f" Prefers selling {order.token} to {order.currency}."
+    elif direction == "onramp":
+        if order.network:
+            fact += f" Received stablecoin to a {order.network} wallet."
+        fact += f" Prefers buying {order.token} with {order.currency}."
+    return fact
+
+
+def _remember_settlement(order, direction: str) -> None:
+    """Fire-and-forget: build the user's memory in the background; never blocks settlement.
+    Every Nth settlement also runs improve()/memify to densify + prune the graph."""
+    global _settle_count
+    dataset = dataset_for_order(order)
+    _spawn(remember_fact(dataset, _settlement_fact(order, direction)))
+    _settle_count += 1
+    if _settle_count % _IMPROVE_EVERY == 0:
+        _spawn(improve_memory(dataset))
 
 
 async def write_0g_records(db: AsyncSession, order, direction: str, data: dict) -> bool:
@@ -62,6 +105,7 @@ async def write_0g_records(db: AsyncSession, order, direction: str, data: dict) 
             "event": "settled", "status": "SETTLED",
             "storage_hash": storage_hash, "chain_tx": chain_tx,
         })
+        _remember_settlement(order, direction)  # background, masked, never blocks
         return True
     except Exception:  # noqa: BLE001
         logger.exception("0G write failed for order %s", order.id)

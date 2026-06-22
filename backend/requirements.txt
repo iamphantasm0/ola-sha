@@ -10,3 +10,7 @@ pydantic-settings==2.4.0
 python-dotenv==1.0.1
 bcrypt==4.2.0
 PyJWT==2.9.0
+# Cognee memory layer (WeMakeDevs × Cognee). BAML structured output + local fastembed embeddings,
+# extraction runs on 0G Compute (no OpenAI). Validated 2026-06-22.
+cognee[baml]==1.2.1
+fastembed==0.8.0

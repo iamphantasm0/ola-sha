@@ -18,6 +18,7 @@ from app.core.db import get_db
 from app.core.dependencies import get_optional_user
 from app.models.user import User
 from app.providers.paycrest import PaycrestProvider
+from app.services.memory import dataset_for_user, recall_context
 from app.repositories.conversations import ConversationRepository
 from app.repositories.orders import OrderRepository
 from app.repositories.sessions import SessionRepository
@@ -67,8 +68,14 @@ async def chat(
     allowed = TOOLS_BY_STATE.get(current_state, [])
     tools = [ALL_TOOLS[name] for name in allowed] or None
 
+    # Personalize the opening only: recall is an extra LLM call, so we skip it mid-transaction.
+    # Returns "" for new/anonymous users or if the memory layer is unavailable (degrades silently).
+    memory_context = ""
+    if current_state == "IDLE":
+        memory_context = await recall_context(dataset_for_user(user, req.session_id), req.message)
+
     messages = [
-        {"role": "system", "content": build_system_prompt(current_state, order)},
+        {"role": "system", "content": build_system_prompt(current_state, order, memory_context)},
         *history,
         {"role": "user", "content": req.message},
     ]
