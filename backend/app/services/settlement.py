@@ -43,16 +43,20 @@ def _spawn(coro) -> None:
 
 
 def _settlement_fact(order, direction: str) -> str:
-    """A masked, pattern-level fact for the memory graph — never raw PII (no full account number,
-    account holder name, or wallet address)."""
+    """A pattern-level fact for the memory graph — preferences ONLY, no account identifiers.
+
+    Deliberately excludes bank name, account number (even last-4), account holder name, and
+    wallet address: this string is sent to the 0G inference provider for entity extraction, and
+    memory's value is the *preference*, not the account. Structured account details that actually
+    get reused live in Postgres (saved accounts), never here. Amount/token/currency mirror what is
+    already public in the on-chain 0G audit record, so they carry no extra exposure."""
     amt = f"{float(order.amount):g}" if order.amount else "?"
     fact = f"User completed a {direction} of {amt} {order.token} for {order.currency}."
-    if direction == "offramp" and order.account_number:
-        fact += f" Settled to {order.bank_name or 'their bank'} (account ending {order.account_number[-4:]})."
+    if direction == "offramp":
         fact += f" Prefers selling {order.token} to {order.currency}."
     elif direction == "onramp":
         if order.network:
-            fact += f" Received stablecoin to a {order.network} wallet."
+            fact += f" Prefers receiving stablecoin on the {order.network} network."
         fact += f" Prefers buying {order.token} with {order.currency}."
     return fact
 
