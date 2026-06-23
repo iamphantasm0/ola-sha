@@ -75,6 +75,34 @@ Next.js 14 chat UI  ──POST /api/chat──►  FastAPI backend
 The agent injects **only the tools valid for the current order state** (`TOOLS_BY_STATE`),
 and the dispatcher re-checks the same gate before executing — a double-gated firewall.
 
+## How Ola uses Cognee (persistent memory)
+
+> A second build (WeMakeDevs × Cognee) layered onto Ola: per-user memory so a returning user
+> gets a smarter second conversation — greeted by name, their usual corridor pre-suggested —
+> **without ever weakening the firewall.** Memory informs what Ola *says*, never what it *does*.
+
+**Fully GPT-free, all on 0G + local infra** (so it never undercuts the "all on 0G" story):
+extraction runs on **minimax-m3 via the 0G Compute router**, structured output uses **BAML**
+(Cognee's default Instructor backend can't parse a reasoning model's output — BAML can),
+embeddings are **local fastembed**, and the graph/vector/relational stores are file-based.
+
+Cognee runs as its own **`memory-sidecar`** (mirroring the storage-sidecar) so its dependencies
+stay isolated from the backend; the backend talks to it over the internal network with
+`x-sidecar-token`. All four lifecycle operations are used meaningfully:
+
+| Op | When | Where |
+|---|---|---|
+| `remember` | after every settlement — a **masked, preference-level** fact (no account numbers/PII) | `settlement.py` (fire-and-forget) |
+| `recall` | start of a conversation (IDLE only, `only_context` for ~3s) → injected as read-only prompt context | `chat.py` → `prompts.py` |
+| `improve` (memify) | every Nth settlement — densify + prune the graph | `settlement.py` |
+| `forget` | `POST /api/v1/privacy/forget-me` — right-to-erasure (NDPR/GDPR) | `privacy.py` |
+
+**Per-user isolation:** memory is keyed by identity — `ola-user-{id}` for logged-in users
+(durable across sessions), `ola-anon-{session_id}` for guests. **Guardrails:** facts are masked
+to preferences before storage; the system prompt treats memory as background only and forbids
+pre-filling any bank/wallet/amount into a tool call from memory; every call degrades gracefully
+(recall returns "" if the sidecar is slow/unavailable, so chat is never blocked).
+
 ## Repository layout
 
 | Path | What |
@@ -82,6 +110,7 @@ and the dispatcher re-checks the same gate before executing — a double-gated f
 | `backend/` | FastAPI: agent loop, dispatcher firewall, Paycrest provider, 0G services |
 | `backend/scripts/smoke_compute.py` | **Run first** — verifies model tool-calling on 0G Compute |
 | `storage-sidecar/` | Node/Express wrapper around `@0glabs/0g-ts-sdk` (Storage) |
+| `memory-sidecar/` | FastAPI wrapper around Cognee (per-user memory; 0G + BAML + fastembed) |
 | `contracts/` | `OlaRegistry.sol` + Hardhat (deploy to 0G testnet) |
 | `frontend/` | Next.js 14 chat UI + status sidebar |
 
