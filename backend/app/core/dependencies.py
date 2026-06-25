@@ -1,48 +1,24 @@
-import uuid
-from typing import Optional
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
-from fastapi import Depends, Header, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 
-from app.core.db import get_db
-from app.core.security import decode_token
-from app.models.user import User
+engine = create_async_engine(settings.DATABASE_URL, echo=False, future=True)
 
-
-def _token_from_header(authorization: Optional[str]) -> Optional[str]:
-    if not authorization:
-        return None
-    parts = authorization.split()
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1]
-    return None
+AsyncSessionLocal = async_sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
 
 
-async def get_current_user(
-    authorization: Optional[str] = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-) -> User:
-    token = _token_from_header(authorization)
-    user_id = decode_token(token) if token else None
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await db.get(User, uuid.UUID(user_id))
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return user
-
-
-async def get_optional_user(
-    authorization: Optional[str] = Header(default=None),
-    db: AsyncSession = Depends(get_db),
-) -> Optional[User]:
-    """Like get_current_user but returns None instead of 401 — for routes that work
-    both logged-in and anonymous (e.g. chat)."""
-    token = _token_from_header(authorization)
-    user_id = decode_token(token) if token else None
-    if not user_id:
-        return None
-    try:
-        return await db.get(User, uuid.UUID(user_id))
-    except (ValueError, TypeError):
-        return None
+async def get_db():
+    """FastAPI dependency: one AsyncSession per request, committed on success."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise

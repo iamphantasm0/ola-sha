@@ -3,23 +3,19 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-class ProviderError(Exception):
-    """A provider (e.g. Paycrest) rejected the request with a user-presentable reason."""
-
-
 @dataclass
 class QuoteResult:
     provider: str
-    direction: str  # "onramp" | "offramp"
+    direction: str          # "onramp" | "offramp"
     input_amount: float
-    input_currency: str  # "USDT"/"USDC" (offramp) or "NGN" (onramp)
+    input_currency: str     # "USDT"/"USDC" (offramp) or "NGN"/... (onramp)
     output_amount: float
     output_currency: str
-    rate: float
+    rate: float             # local_currency per USD
     fee: float
     fee_currency: str
-    quote_id: Optional[str] = None
-    expires_at: Optional[str] = None
+    quote_id: Optional[str]
+    expires_at: Optional[str]
 
 
 @dataclass
@@ -27,18 +23,21 @@ class PaymentInstructions:
     """What to show the user after order creation."""
 
     direction: str
-    # Offramp: where the user sends stablecoin
+
+    # Offramp: show deposit address
     deposit_address: Optional[str] = None
     deposit_token: Optional[str] = None
     deposit_network: Optional[str] = None
-    # Onramp: virtual bank account the user pays fiat into
+
+    # Onramp: show bank account to send fiat to
     bank_name: Optional[str] = None
     account_number: Optional[str] = None
     account_name: Optional[str] = None
     amount_to_transfer: Optional[str] = None
     transfer_currency: Optional[str] = None
     reference: Optional[str] = None
-    # Shared
+
+    # Both: deadline by which the user must act
     valid_until: Optional[str] = None
 
 
@@ -52,10 +51,15 @@ class OrderResult:
 
 
 class IFiatProvider(ABC):
-    """Interface for fiat <-> stablecoin providers (Paycrest, Transak, etc.)."""
+    """
+    Interface for fiat <-> stablecoin providers.
+    Implement this to add Transak, Yellow Card, etc.
+    """
 
     @abstractmethod
-    async def get_offramp_quote(self, token: str, amount: float, currency: str) -> QuoteResult:
+    async def get_offramp_quote(
+        self, token: str, amount: float, currency: str
+    ) -> QuoteResult:
         ...
 
     @abstractmethod
@@ -64,7 +68,7 @@ class IFiatProvider(ABC):
         token: str,
         amount: float,
         currency: str,
-        institution_code: str,
+        bank_name: str,
         account_number: str,
         account_name: str,
         sender_id: str,
@@ -72,7 +76,9 @@ class IFiatProvider(ABC):
         ...
 
     @abstractmethod
-    async def get_onramp_quote(self, token: str, amount: float, currency: str) -> QuoteResult:
+    async def get_onramp_quote(
+        self, token: str, amount: float, currency: str
+    ) -> QuoteResult:
         ...
 
     @abstractmethod
@@ -89,16 +95,4 @@ class IFiatProvider(ABC):
 
     @abstractmethod
     async def get_order_status(self, provider_order_id: str) -> dict:
-        ...
-
-    @abstractmethod
-    async def verify_bank_account(self, institution_code: str, account_identifier: str) -> str:
-        ...
-
-    @abstractmethod
-    async def get_institutions(self, currency: str) -> list[dict]:
-        ...
-
-    @abstractmethod
-    async def resolve_institution_code(self, currency: str, bank_name: str) -> Optional[str]:
         ...

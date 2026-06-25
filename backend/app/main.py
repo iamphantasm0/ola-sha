@@ -1,52 +1,42 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import accounts, actions, auth, chat, orders, verify, webhooks
-from app.core.db import engine
-from app.models import Base
-from app.services.reconciler import run_reconciler
+import app.models  # noqa: F401  (ensure models register on Base.metadata)
+from app.api.v1 import chat, orders, webhooks
+from app.core.config import settings
+from app.core.dependencies import engine
+from app.models.base import Base
 
 logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    # MVP: create tables on startup. (Swap for Alembic migrations before production.)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-    # Background poller detects settlement without a Paycrest webhook (one URL per account).
-    stop = asyncio.Event()
-    task = asyncio.create_task(run_reconciler(stop))
-    try:
-        yield
-    finally:
-        stop.set()
-        await task
+async def lifespan(_app: FastAPI):
+    # In DEBUG we create tables on startup so the demo runs without Alembic.
+    # In production, run `alembic upgrade head` and leave DEBUG off.
+    if settings.DEBUG:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    yield
 
 
 app = FastAPI(title="Ola API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # MVP — tighten for production
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix="/api/v1")
-app.include_router(accounts.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
-app.include_router(actions.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
-app.include_router(verify.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
 
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "service": "ola-api"}
+    return {"ok": True, "service": "ola-backend"}

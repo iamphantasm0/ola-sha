@@ -1,81 +1,43 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { AuthModal } from "../components/Auth/AuthModal";
-import { ChatWindow } from "../components/Chat/ChatWindow";
-import { StatusPanel } from "../components/Sidebar/StatusPanel";
-import { useAuth } from "../hooks/useAuth";
-import { useChat } from "../hooks/useChat";
+import { ChatWindow } from "@/components/Chat/ChatWindow";
+import { InputBar } from "@/components/Chat/InputBar";
+import { StatusPanel } from "@/components/Sidebar/StatusPanel";
+import { useChat } from "@/hooks/useChat";
 
 export default function Home() {
-  const { messages, order, actions, loading, send, runAction, newChat } = useChat();
-  const { email, isAuthed, login, register, logout } = useAuth();
-  const [showAuth, setShowAuth] = useState(false);
+  const { messages, order, loading, send, newChat } = useChat();
 
   return (
-    <main className="ola-bg flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-edge px-5 py-3.5">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-2xl font-semibold tracking-tight text-gold">Ola</span>
-          <span className="hidden text-[11px] uppercase tracking-[0.22em] text-muted sm:inline">
-            stablecoin concierge
+    <main className="flex h-screen flex-col">
+      <header className="flex items-center justify-between border-b border-line bg-panel px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="text-lg font-semibold tracking-tight text-mint">Ola</span>
+          <span className="hidden text-xs text-muted sm:inline">
+            AI crypto ↔ fiat · by Vela Labs
           </span>
         </div>
-        <div className="flex items-center gap-2.5">
-          <Link
-            href="/verify"
-            className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
-          >
-            Verify on 0G
-          </Link>
-          <button
-            onClick={newChat}
-            className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
-          >
-            New transaction
-          </button>
-          {isAuthed ? (
-            <div className="flex items-center gap-2.5">
-              <span className="hidden font-mono text-xs text-muted sm:inline">{email}</span>
-              <button
-                onClick={logout}
-                className="rounded-full border border-edge px-3.5 py-1.5 text-xs text-muted transition-colors hover:border-gold/50 hover:text-text"
-              >
-                Sign out
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAuth(true)}
-              className="rounded-full bg-gold px-4 py-1.5 text-xs font-medium text-ink transition-transform hover:-translate-y-px"
-            >
-              Sign in
-            </button>
-          )}
-        </div>
+        <button
+          onClick={newChat}
+          className="rounded-lg border border-line px-3 py-1.5 text-xs text-gray-200 hover:border-mint"
+        >
+          New chat
+        </button>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          <ChatWindow
-            messages={messages}
-            actions={actions}
-            authed={isAuthed}
-            loading={loading}
-            onSend={send}
-            onRun={runAction}
-            onRequireLogin={() => setShowAuth(true)}
-          />
-        </div>
-        <aside className="hidden w-[300px] shrink-0 p-3 md:block">
+      <div className="flex min-h-0 flex-1">
+        <section className="flex min-w-0 flex-1 flex-col">
+          <ChatWindow messages={messages} loading={loading} />
+          <InputBar onSend={send} disabled={loading} />
+        </section>
+
+        <aside className="hidden w-[280px] shrink-0 overflow-y-auto border-l border-line bg-panel md:block">
+          <div className="border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
+            Transaction
+          </div>
           <StatusPanel order={order} />
         </aside>
       </div>
-
-      {showAuth && (
-        <AuthModal onClose={() => setShowAuth(false)} onLogin={login} onRegister={register} />
-      )}
     </main>
   );
 }

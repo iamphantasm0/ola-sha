@@ -1,0 +1,14 @@
+# Dev conveniences — automatically merged by `docker compose up`.
+# Mounts source for live reload. Remove / ignore in production.
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  storage-sidecar:
+    volumes:
+      - ./storage-sidecar/src:/app/src
+    command: >
+      npm run dev

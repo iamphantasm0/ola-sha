@@ -1,101 +1,113 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchOrder, sendAction, sendChat } from "../lib/api";
-import { getSessionId, resetSession } from "../lib/session";
-import { Action, ChatMessage, OrderState, POLLING_STATES, TERMINAL_STATES } from "../lib/types";
 
-const GREETING: ChatMessage = {
-  role: "assistant",
-  content:
-    "I'm Ola, your stablecoin concierge. Tell me what you'd like to do and I'll handle the rest — every settlement is proven on 0G.\n\nTry: \"sell 200 USDC for naira\", \"buy 50 USDT with shillings\", or ask \"what are the best rates?\". New here? Just say **help**.",
-};
+import { fetchOrder, sendChat } from "@/lib/api";
+import { getSessionId, resetSession } from "@/lib/session";
+import { ChatMessage, OrderState } from "@/lib/types";
+
+const POLL_STATES = new Set([
+  "OFFRAMP_AWAITING_DEPOSIT",
+  "OFFRAMP_PROCESSING",
+  "ONRAMP_AWAITING_PAYMENT",
+  "ONRAMP_PROCESSING",
+]);
+
+const GREETING =
+  'Hey, I\'m Ola. I help you swap stablecoins and local currency.\n\n' +
+  '• Sell: "sell 200 USDT for NGN"\n' +
+  '• Buy:  "buy 100 USDT with NGN"\n\n' +
+  "Corridors: NGN, KES, UGX, TZS, MWK, BRL.";
 
 export function useChat() {
-  const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
+  const [sessionId, setSessionId] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [order, setOrder] = useState<OrderState | null>(null);
-  const [actions, setActions] = useState<Action[]>([]);
   const [loading, setLoading] = useState(false);
-  const sessionRef = useRef<string>("");
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastStatusRef = useRef<string | null>(null);
 
   useEffect(() => {
-    sessionRef.current = getSessionId();
+    setSessionId(getSessionId());
   }, []);
 
-  const stopPolling = useCallback(() => {
+  useEffect(() => {
+    if (sessionId && messages.length === 0) {
+      setMessages([{ role: "assistant", content: GREETING }]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || !sessionId || loading) return;
+      setMessages((m) => [...m, { role: "user", content: text }]);
+      setLoading(true);
+      try {
+        const res = await sendChat(sessionId, text);
+        setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
+        if (res.order_state) {
+          setOrder(res.order_state);
+          lastStatusRef.current = res.order_state.status;
+        }
+      } catch {
+        setMessages((m) => [
+          ...m,
+          { role: "assistant", content: "Sorry — something went wrong. Please try again." },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionId, loading]
+  );
+
+  const newChat = useCallback(() => {
+    const id = resetSession();
+    setSessionId(id);
+    setMessages([{ role: "assistant", content: GREETING }]);
+    setOrder(null);
+    lastStatusRef.current = null;
+  }, []);
+
+  // Poll for webhook-driven status changes (settled / failed land out of band).
+  useEffect(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-  }, []);
+    if (!sessionId || !order || !POLL_STATES.has(order.status)) return;
 
-  useEffect(() => {
-    stopPolling();
-    if (!order || !POLLING_STATES.has(order.status)) return;
     pollRef.current = setInterval(async () => {
-      try {
-        const fresh = await fetchOrder(order.order_id, sessionRef.current);
-        setOrder(fresh);
-        if (TERMINAL_STATES.has(fresh.status) || !POLLING_STATES.has(fresh.status)) stopPolling();
-        if (fresh.status === "SETTLED") {
-          setActions([]);
+      const o = await fetchOrder(sessionId);
+      if (!o) return;
+      if (o.status !== lastStatusRef.current) {
+        lastStatusRef.current = o.status;
+        if (o.status === "SETTLED") {
+          setMessages((m) => [...m, { role: "assistant", content: settledMessage(o) }]);
+        } else if (o.status === "FAILED") {
           setMessages((m) => [
             ...m,
-            {
-              role: "assistant",
-              content: `Settled. ✅ Receipt on 0G.\nStorage hash: ${fresh.storage_hash ?? "—"}`,
-            },
+            { role: "assistant", content: o.last_event_message || "Transaction failed." },
           ]);
         }
-      } catch {
-        /* transient */
       }
-    }, 3000);
-    return stopPolling;
-  }, [order, stopPolling]);
+      setOrder(o);
+    }, 4000);
 
-  const apply = useCallback((res: { reply: string; order_state: OrderState | null; actions: Action[] }) => {
-    setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
-    setOrder(res.order_state);
-    setActions(res.actions || []);
-  }, []);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, order?.status]);
 
-  const send = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || loading) return;
-    setMessages((m) => [...m, { role: "user", content: trimmed }]);
-    setLoading(true);
-    try {
-      apply(await sendChat(trimmed, sessionRef.current));
-    } catch {
-      setMessages((m) => [...m, { role: "assistant", content: "Something went wrong. Please try again." }]);
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, apply]);
+  return { sessionId, messages, order, loading, send, newChat };
+}
 
-  const runAction = useCallback(async (action: string, payload: Record<string, any> = {}, userEcho?: string) => {
-    if (loading) return;
-    if (userEcho) setMessages((m) => [...m, { role: "user", content: userEcho }]);
-    setLoading(true);
-    try {
-      apply(await sendAction(action, sessionRef.current, payload));
-    } catch (e: any) {
-      setMessages((m) => [...m, { role: "assistant", content: e.message || "That action failed. Please try again." }]);
-    } finally {
-      setLoading(false);
-    }
-  }, [loading, apply]);
-
-  const newChat = useCallback(() => {
-    stopPolling();
-    resetSession();
-    sessionRef.current = getSessionId();
-    setMessages([GREETING]);
-    setOrder(null);
-    setActions([]);
-  }, [stopPolling]);
-
-  return { messages, order, actions, loading, send, runAction, newChat };
+function settledMessage(o: OrderState): string {
+  const lines = ["Done — your transaction settled and is now verifiable on 0G.", ""];
+  if (o.storage_hash) lines.push(`0G Storage receipt: ${o.storage_hash}`);
+  if (o.registry_tx_hash) lines.push(`0G Chain tx: ${o.registry_tx_hash}`);
+  return lines.join("\n");
 }

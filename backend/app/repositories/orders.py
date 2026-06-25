@@ -1,71 +1,60 @@
 import uuid
-from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.order import Order, OrderStatus, TERMINAL_STATES
+from app.models.order import ACTIVE_STATUSES, Order, OrderStatus
 
 
 class OrderRepository:
     @staticmethod
-    async def get_active_by_session(db: AsyncSession, session_id: str) -> Optional[Order]:
-        """Most recent non-terminal order for the session (the one in progress)."""
-        result = await db.execute(
-            select(Order)
-            .where(Order.session_id == uuid.UUID(str(session_id)))
-            .where(Order.status.notin_(list(TERMINAL_STATES)))
-            .order_by(Order.created_at.desc())
-        )
-        return result.scalars().first()
-
-    @staticmethod
-    async def get_latest_by_session(db: AsyncSession, session_id: str) -> Optional[Order]:
-        result = await db.execute(
-            select(Order)
-            .where(Order.session_id == uuid.UUID(str(session_id)))
-            .order_by(Order.created_at.desc())
-        )
-        return result.scalars().first()
-
-    @staticmethod
-    async def get_by_id(db: AsyncSession, order_id: str) -> Optional[Order]:
+    async def get(db, order_id):
         return await db.get(Order, uuid.UUID(str(order_id)))
 
     @staticmethod
-    async def get_by_paycrest_id(db: AsyncSession, paycrest_id: str) -> Optional[Order]:
-        result = await db.execute(
-            select(Order).where(Order.paycrest_order_id == paycrest_id)
+    async def get_active_by_session(db, session_id):
+        sid = uuid.UUID(str(session_id))
+        q = (
+            select(Order)
+            .where(Order.session_id == sid)
+            .where(Order.status.in_(list(ACTIVE_STATUSES)))
+            .order_by(Order.created_at.desc())
+            .limit(1)
         )
-        return result.scalars().first()
+        return (await db.execute(q)).scalars().first()
 
     @staticmethod
-    async def list_pollable(db: AsyncSession) -> list[Order]:
-        """Non-terminal orders that have a Paycrest id — i.e. awaiting/processing.
-
-        These are the only orders whose Paycrest status can still change, so the
-        poller checks just these (quote/collecting states have no provider id yet).
-        """
-        result = await db.execute(
+    async def get_latest_by_session(db, session_id):
+        sid = uuid.UUID(str(session_id))
+        q = (
             select(Order)
-            .where(Order.paycrest_order_id.isnot(None))
-            .where(Order.status.notin_(list(TERMINAL_STATES)))
+            .where(Order.session_id == sid)
+            .order_by(Order.created_at.desc())
+            .limit(1)
         )
-        return list(result.scalars().all())
+        return (await db.execute(q)).scalars().first()
+
+    @staticmethod
+    async def get_by_paycrest_id(db, paycrest_id):
+        q = select(Order).where(Order.paycrest_order_id == paycrest_id).limit(1)
+        return (await db.execute(q)).scalars().first()
+
+    @staticmethod
+    async def cancel_active_for_session(db, session_id):
+        """A fresh quote supersedes any in-flight quote for the same session."""
+        sid = uuid.UUID(str(session_id))
+        q = (
+            select(Order)
+            .where(Order.session_id == sid)
+            .where(Order.status.in_(list(ACTIVE_STATUSES)))
+        )
+        for order in (await db.execute(q)).scalars().all():
+            order.status = OrderStatus.CANCELLED
+        await db.flush()
 
     @staticmethod
     async def create_quote(
-        db: AsyncSession,
-        session_id: str,
-        direction: str,
-        token: str,
-        amount: float,
-        currency: str,
-        rate: float,
-        output_amount: float,
-        status: OrderStatus,
-    ) -> Order:
-        """Create a pending order from a quote AND set the QUOTING state."""
+        db, session_id, direction, token, amount, currency, rate, output_amount, status
+    ):
         order = Order(
             session_id=uuid.UUID(str(session_id)),
             direction=direction,
@@ -77,35 +66,23 @@ class OrderRepository:
             status=status,
         )
         db.add(order)
-        await db.commit()
-        await db.refresh(order)
+        await db.flush()
         return order
 
     @staticmethod
-    async def set_status(db: AsyncSession, order: Order, status: OrderStatus) -> Order:
-        order.status = status
-        await db.commit()
-        await db.refresh(order)
-        return order
-
-    @staticmethod
-    async def update(db: AsyncSession, order: Order, **fields) -> Order:
-        for k, v in fields.items():
-            setattr(order, k, v)
-        await db.commit()
-        await db.refresh(order)
-        return order
-
-    @staticmethod
-    async def settle(
-        db: AsyncSession, order_id: str, storage_hash: str, registry_tx_hash: str
-    ) -> Optional[Order]:
+    async def update_status(db, order_id, status):
         order = await db.get(Order, uuid.UUID(str(order_id)))
-        if not order:
-            return None
-        order.storage_hash = storage_hash
-        order.registry_tx_hash = registry_tx_hash
-        order.status = OrderStatus.SETTLED
-        await db.commit()
-        await db.refresh(order)
+        if order:
+            order.status = status
+            await db.flush()
+        return order
+
+    @staticmethod
+    async def settle(db, order_id, storage_hash, registry_tx_hash):
+        order = await db.get(Order, uuid.UUID(str(order_id)))
+        if order:
+            order.status = OrderStatus.SETTLED
+            order.storage_hash = storage_hash
+            order.registry_tx_hash = registry_tx_hash
+            await db.flush()
         return order

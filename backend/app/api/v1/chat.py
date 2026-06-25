@@ -1,71 +1,42 @@
 import json
 import logging
-import re
-import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends
 
 from app.agent.client import og_client
 from app.agent.dispatcher import dispatch_tool_call
-from app.agent.presenter import render_tool_reply
 from app.agent.prompts import build_system_prompt
 from app.agent.tools import ALL_TOOLS, TOOLS_BY_STATE
-from app.api.v1.common import assemble_response, ensure_order_access
 from app.core.config import settings
-from app.core.db import get_db
-from app.core.dependencies import get_optional_user
-from app.models.user import User
+from app.core.dependencies import get_db
 from app.providers.paycrest import PaycrestProvider
 from app.repositories.conversations import ConversationRepository
 from app.repositories.orders import OrderRepository
 from app.repositories.sessions import SessionRepository
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.schemas.order import serialize_order
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 provider = PaycrestProvider()
 
-_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
 
-
-def _strip_reasoning(text: str) -> str:
-    """Remove <think>…</think> blocks (minimax-m3 reasons out loud by default)."""
-    if not text:
-        return text
-    cleaned = _THINK_RE.sub("", text)
-    # Drop a dangling unclosed <think> … (truncated reasoning) too.
-    cleaned = re.sub(r"<think>.*$", "", cleaned, flags=re.DOTALL | re.IGNORECASE)
-    return cleaned.strip()
-
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-
-
-@router.post("/chat")
-async def chat(
-    req: ChatRequest,
-    user: User | None = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-):
-    try:
-        uuid.UUID(str(req.session_id))
-    except ValueError:
-        raise HTTPException(status_code=400, detail="session_id must be a valid UUID")
-
+@router.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest, db=Depends(get_db)):
+    # 1. Session + active order + state
     await SessionRepository.get_or_create(db, req.session_id)
-
     order = await OrderRepository.get_active_by_session(db, req.session_id)
-    await ensure_order_access(db, order, user)  # 403 if order owned by another account
     current_state = order.status.value if order else "IDLE"
 
+    # 2. History + persist the new user turn
     history = await ConversationRepository.get_history(db, req.session_id, limit=20)
-    await ConversationRepository.add_message(db, req.session_id, "user", req.message)
+    await ConversationRepository.add_message(
+        db, req.session_id, role="user", content=req.message
+    )
 
-    allowed = TOOLS_BY_STATE.get(current_state, [])
-    tools = [ALL_TOOLS[name] for name in allowed] or None
+    # 3. Inject ONLY the tools valid for the current state
+    allowed_tool_names = TOOLS_BY_STATE.get(current_state, [])
+    tools = [ALL_TOOLS[n] for n in allowed_tool_names] or None
 
     messages = [
         {"role": "system", "content": build_system_prompt(current_state, order)},
@@ -73,56 +44,81 @@ async def chat(
         {"role": "user", "content": req.message},
     ]
 
+    # 4. First model call
     response = await og_client.chat.completions.create(
         model=settings.OG_COMPUTE_MODEL,
         messages=messages,
         tools=tools,
         tool_choice="auto" if tools else None,
-        max_tokens=600,
+        max_tokens=500,
         temperature=0.2,
     )
     choice = response.choices[0]
     tool_called = None
 
-    if choice.message.tool_calls:
-        tc = choice.message.tool_calls[0]  # state gate enforces one logical step at a time
-        tool_called = tc.function.name
+    if choice.finish_reason == "tool_calls" and choice.message.tool_calls:
+        tool_call = choice.message.tool_calls[0]
+        tool_name = tool_call.function.name
         try:
-            tool_args = json.loads(tc.function.arguments or "{}")
+            tool_args = json.loads(tool_call.function.arguments or "{}")
         except json.JSONDecodeError:
             tool_args = {}
+        tool_called = tool_name
 
+        # 5. Dispatch through the firewall (state gate re-checked inside)
         tool_result = await dispatch_tool_call(
-            tool_name=tc.function.name,
+            tool_name=tool_name,
             tool_args=tool_args,
             current_state=current_state,
             order=order,
             session_id=req.session_id,
             provider=provider,
-            db=db,
-            user=user,
+            db_session=db,
         )
 
-        # Money-critical data (addresses, accounts, amounts) is rendered deterministically
-        # from the tool result — the model must NOT free-form it (it hallucinates otherwise).
-        reply = render_tool_reply(tc.function.name, tool_result)
-        if reply is None:
-            messages.append(choice.message.model_dump())
-            messages.append({"role": "tool", "tool_call_id": tc.id, "content": tool_result})
-            followup = await og_client.chat.completions.create(
-                model=settings.OG_COMPUTE_MODEL,
-                messages=messages,
-                max_tokens=400,
-                temperature=0.2,
-            )
-            reply = followup.choices[0].message.content or ""
+        # 6. Second model call with the tool result. We rebuild the assistant
+        #    message with exactly the one tool_call we handled so the message
+        #    array stays valid even if the model emitted several.
+        messages.append(
+            {
+                "role": "assistant",
+                "content": choice.message.content or "",
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": tool_call.function.arguments or "{}",
+                        },
+                    }
+                ],
+            }
+        )
+        messages.append(
+            {"role": "tool", "tool_call_id": tool_call.id, "content": tool_result}
+        )
+
+        followup = await og_client.chat.completions.create(
+            model=settings.OG_COMPUTE_MODEL,
+            messages=messages,
+            max_tokens=300,
+            temperature=0.2,
+        )
+        reply = followup.choices[0].message.content or ""
     else:
         reply = choice.message.content or ""
 
-    reply = _strip_reasoning(reply)
-    await ConversationRepository.add_message(db, req.session_id, "assistant", reply)
+    # 7. Persist assistant reply
+    await ConversationRepository.add_message(
+        db, req.session_id, role="assistant", content=reply
+    )
 
-    order = await OrderRepository.get_latest_by_session(db, req.session_id)
-    # Bind a freshly-created (anonymous) order to the authenticated caller.
-    await ensure_order_access(db, order, user)
-    return await assemble_response(db, order, user, reply, tool_called)
+    # 8. Reload order for the response payload
+    order = await OrderRepository.get_active_by_session(
+        db, req.session_id
+    ) or await OrderRepository.get_latest_by_session(db, req.session_id)
+
+    return ChatResponse(
+        reply=reply, order_state=serialize_order(order), tool_called=tool_called
+    )

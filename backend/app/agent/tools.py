@@ -1,13 +1,10 @@
-"""Tool definitions (OpenAI function-calling format) and the state->tools firewall.
-
-Only the tools listed for the current state are injected into each Compute call,
-and the dispatcher re-checks the same map before executing — double-gated.
 """
+Tool definitions in OpenAI function-calling format, plus the state gate.
 
-CURRENCIES = ["NGN", "KES", "UGX", "TZS", "MWK", "BRL"]
-TOKENS = ["USDC", "USDT"]
-NETWORKS = ["base", "arbitrum", "polygon", "ethereum"]
-
+Only the tools allowed for the current order state are injected into each
+0G Compute Router call. The dispatcher re-checks the gate server-side, so a
+hallucinated tool call can never execute out of state.
+"""
 
 ALL_TOOLS = {
     "get_offramp_quote": {
@@ -15,13 +12,18 @@ ALL_TOOLS = {
         "function": {
             "name": "get_offramp_quote",
             "description": (
-                "Get the current exchange rate and payout for SELLING stablecoins for local "
-                "currency. Call when the user wants to sell USDC/USDT and receive fiat."
+                "Get the current exchange rate and calculate payout for selling "
+                "stablecoins for local currency. Call this when the user wants to "
+                "sell USDC or USDT and receive fiat money."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "token": {"type": "string", "enum": TOKENS, "description": "Stablecoin to sell."},
+                    "token": {
+                        "type": "string",
+                        "enum": ["USDC", "USDT"],
+                        "description": "The stablecoin to sell.",
+                    },
                     "amount": {
                         "type": "number",
                         "minimum": 1,
@@ -30,8 +32,8 @@ ALL_TOOLS = {
                     },
                     "currency": {
                         "type": "string",
-                        "enum": CURRENCIES,
-                        "description": "Local currency to receive. Default NGN.",
+                        "enum": ["NGN", "KES", "UGX", "TZS", "MWK", "BRL"],
+                        "description": "Local currency to receive. Default NGN if unspecified.",
                     },
                 },
                 "required": ["token", "amount", "currency"],
@@ -43,13 +45,18 @@ ALL_TOOLS = {
         "function": {
             "name": "get_onramp_quote",
             "description": (
-                "Get the current exchange rate and cost for BUYING stablecoins with local "
-                "currency. Call when the user wants to buy USDC/USDT using a bank transfer."
+                "Get the current exchange rate and calculate cost for buying "
+                "stablecoins with local currency. Call this when the user wants to "
+                "buy USDC or USDT using cash or bank transfer."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "token": {"type": "string", "enum": TOKENS, "description": "Stablecoin to buy."},
+                    "token": {
+                        "type": "string",
+                        "enum": ["USDC", "USDT"],
+                        "description": "The stablecoin to buy.",
+                    },
                     "amount": {
                         "type": "number",
                         "minimum": 1,
@@ -58,7 +65,7 @@ ALL_TOOLS = {
                     },
                     "currency": {
                         "type": "string",
-                        "enum": CURRENCIES,
+                        "enum": ["NGN", "KES", "UGX", "TZS", "MWK", "BRL"],
                         "description": "Local currency to pay with.",
                     },
                 },
@@ -71,8 +78,9 @@ ALL_TOOLS = {
         "function": {
             "name": "confirm_offramp",
             "description": (
-                "User has EXPLICITLY agreed to the offramp quote. Call ONLY after the user "
-                "says yes/confirm/proceed. Never call speculatively."
+                "User has explicitly agreed to the offramp rate quote. Call ONLY "
+                "after the user says yes, confirms, or clearly accepts. Do not call "
+                "speculatively."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -82,20 +90,8 @@ ALL_TOOLS = {
         "function": {
             "name": "confirm_onramp",
             "description": (
-                "User has EXPLICITLY agreed to the onramp quote. Call ONLY after the user "
-                "says yes/confirm/proceed."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    "confirm_bank_details": {
-        "type": "function",
-        "function": {
-            "name": "confirm_bank_details",
-            "description": (
-                "Call ONLY after the user confirms (yes/correct) that the verified account "
-                "name you showed them is right. This creates the payout order and returns the "
-                "deposit address."
+                "User has explicitly agreed to the onramp rate quote. Call ONLY "
+                "after the user says yes, confirms, or clearly accepts."
             ),
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
@@ -105,20 +101,27 @@ ALL_TOOLS = {
         "function": {
             "name": "submit_bank_details",
             "description": (
-                "Submit the user's bank and account number for the fiat payout. The account "
-                "holder NAME is fetched and verified automatically — do NOT ask the user for it. "
-                "Call once you have the bank name and account number."
+                "Submit the user's bank account details for receiving the fiat "
+                "payout. Only call when you have ALL three fields from the user."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "bank_name": {"type": "string", "description": "Bank name, e.g. GTBank, Access, UBA."},
+                    "bank_name": {
+                        "type": "string",
+                        "description": "Bank name (e.g. GTBank, Access, UBA, Zenith).",
+                    },
                     "account_number": {
                         "type": "string",
-                        "description": "Bank account number (10 digits for NGN).",
+                        "pattern": "^[0-9]{10}$",
+                        "description": "10-digit bank account number.",
+                    },
+                    "account_name": {
+                        "type": "string",
+                        "description": "Account holder name exactly as on the account.",
                     },
                 },
-                "required": ["bank_name", "account_number"],
+                "required": ["bank_name", "account_number", "account_name"],
             },
         },
     },
@@ -126,7 +129,10 @@ ALL_TOOLS = {
         "type": "function",
         "function": {
             "name": "submit_wallet_address",
-            "description": "Submit the user's wallet address for receiving stablecoins after onramp.",
+            "description": (
+                "Submit the user's wallet address for receiving stablecoins after "
+                "onramp."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -137,7 +143,7 @@ ALL_TOOLS = {
                     },
                     "network": {
                         "type": "string",
-                        "enum": NETWORKS,
+                        "enum": ["base", "polygon", "arbitrum", "ethereum", "bnb"],
                         "description": "Chain to receive the stablecoin on.",
                     },
                 },
@@ -150,10 +156,20 @@ ALL_TOOLS = {
         "function": {
             "name": "check_deposit_status",
             "description": (
-                "Check whether the user's stablecoin deposit has been detected by the provider. "
-                "Call when the user asks for a status update after deposit instructions."
+                "Check whether the user's stablecoin deposit has been detected by "
+                "Paycrest. Call when the user asks for a status update after being "
+                "given deposit instructions."
             ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "The order ID from the current session.",
+                    }
+                },
+                "required": ["order_id"],
+            },
         },
     },
     "check_payment_status": {
@@ -161,10 +177,19 @@ ALL_TOOLS = {
         "function": {
             "name": "check_payment_status",
             "description": (
-                "Check whether the user's bank transfer has been received by the provider. "
-                "Call when the user claims they have sent payment."
+                "Check whether the user's fiat bank transfer has been received by "
+                "Paycrest. Call when the user claims they have sent payment."
             ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "order_id": {
+                        "type": "string",
+                        "description": "The order ID from the current session.",
+                    }
+                },
+                "required": ["order_id"],
+            },
         },
     },
     "cancel_order": {
@@ -172,12 +197,17 @@ ALL_TOOLS = {
         "function": {
             "name": "cancel_order",
             "description": (
-                "Cancel the current order. Call ONLY if the user explicitly asks to cancel. "
-                "Do not cancel due to confusion or silence."
+                "Cancel the current order. Call ONLY if the user explicitly asks to "
+                "cancel. Do not cancel due to confusion or silence."
             ),
             "parameters": {
                 "type": "object",
-                "properties": {"reason": {"type": "string", "description": "Brief reason."}},
+                "properties": {
+                    "reason": {
+                        "type": "string",
+                        "description": "Brief reason for cancellation.",
+                    }
+                },
                 "required": [],
             },
         },
@@ -187,72 +217,30 @@ ALL_TOOLS = {
         "function": {
             "name": "get_receipt",
             "description": "Get the transaction receipt for the completed or failed order.",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-        },
-    },
-    "get_market_insights": {
-        "type": "function",
-        "function": {
-            "name": "get_market_insights",
-            "description": (
-                "Get LIVE market data to advise the user: exchange rate, success rate, "
-                "settlement speed, min/max limits, and available liquidity for a corridor, plus "
-                "network-wide trust stats (total settlements, success %, median delivery). Call "
-                "when the user asks about rates, reliability, speed, limits, liquidity, the best "
-                "option, or how busy/trustworthy the network is. Pass token+currency for a "
-                "specific corridor, or omit both for a network overview."
-            ),
             "parameters": {
                 "type": "object",
-                "properties": {
-                    "token": {"type": "string", "enum": TOKENS, "description": "Stablecoin (optional)."},
-                    "currency": {"type": "string", "enum": CURRENCIES, "description": "Local currency (optional)."},
-                },
-                "required": [],
+                "properties": {"order_id": {"type": "string"}},
+                "required": ["order_id"],
             },
-        },
-    },
-    "get_help": {
-        "type": "function",
-        "function": {
-            "name": "get_help",
-            "description": (
-                "Explain what Ola can do. Call when the user asks for help, asks what you can "
-                "do / how this works, or seems unsure how to start."
-            ),
-            "parameters": {"type": "object", "properties": {}, "required": []},
         },
     },
 }
 
 
 TOOLS_BY_STATE = {
-    "IDLE": ["get_offramp_quote", "get_onramp_quote", "get_market_insights"],
-    # Offramp — submit_bank_details is allowed from QUOTING too: minimax tends to collapse the
-    # confirm step, and if the submit tool isn't available it will hallucinate a deposit address.
-    "OFFRAMP_QUOTING": [
-        "confirm_offramp", "submit_bank_details", "get_offramp_quote", "get_onramp_quote",
-        "get_market_insights", "cancel_order",
-    ],
-    "OFFRAMP_COLLECTING_BANK": ["submit_bank_details", "get_offramp_quote", "cancel_order"],
-    "OFFRAMP_CONFIRMING_BANK": ["confirm_bank_details", "submit_bank_details", "cancel_order"],
+    "IDLE": ["get_offramp_quote", "get_onramp_quote"],
+    # Offramp
+    "OFFRAMP_QUOTING": ["confirm_offramp", "cancel_order"],
+    "OFFRAMP_COLLECTING_BANK": ["submit_bank_details", "cancel_order"],
     "OFFRAMP_AWAITING_DEPOSIT": ["check_deposit_status", "cancel_order"],
-    "OFFRAMP_PROCESSING": [],
+    "OFFRAMP_PROCESSING": [],  # backend is working; AI cannot act
     # Onramp
-    "ONRAMP_QUOTING": [
-        "confirm_onramp", "submit_wallet_address", "get_onramp_quote", "get_offramp_quote",
-        "get_market_insights", "cancel_order",
-    ],
-    "ONRAMP_COLLECTING_WALLET": ["submit_wallet_address", "get_onramp_quote", "cancel_order"],
+    "ONRAMP_QUOTING": ["confirm_onramp", "cancel_order"],
+    "ONRAMP_COLLECTING_WALLET": ["submit_wallet_address", "cancel_order"],
     "ONRAMP_AWAITING_PAYMENT": ["check_payment_status", "cancel_order"],
-    "ONRAMP_PROCESSING": [],
+    "ONRAMP_PROCESSING": [],  # backend is working; AI cannot act
     # Terminal
-    "SETTLED": ["get_receipt", "get_offramp_quote", "get_onramp_quote", "get_market_insights"],
-    "FAILED": ["get_receipt", "get_offramp_quote", "get_onramp_quote", "get_market_insights"],
-    "CANCELLED": ["get_offramp_quote", "get_onramp_quote", "get_market_insights"],
+    "SETTLED": ["get_receipt", "get_offramp_quote", "get_onramp_quote"],
+    "FAILED": ["get_receipt", "get_offramp_quote", "get_onramp_quote"],
+    "CANCELLED": ["get_offramp_quote", "get_onramp_quote"],
 }
-
-# "help" is always available except while the backend is mid-settlement (AI calls nothing there).
-for _state, _tools in TOOLS_BY_STATE.items():
-    if _state not in ("OFFRAMP_PROCESSING", "ONRAMP_PROCESSING") and "get_help" not in _tools:
-        _tools.append("get_help")

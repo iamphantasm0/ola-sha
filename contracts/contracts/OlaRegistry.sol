@@ -1,19 +1,30 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title OlaRegistry
-/// @notice Append-only on-chain settlement log for Ola crypto<->fiat exchange.
-///         The backend wallet (owner) writes one record per fully-settled order,
-///         linking the on-chain proof to the 0G Storage audit record.
+/**
+ * @title OlaRegistry
+ * @notice Append-only on-chain settlement log for Ola — an AI-powered
+ *         crypto <-> fiat exchange demo by Vela Labs (Zero Cup 2026).
+ *
+ *         One row is written per fully-settled Paycrest order. The full
+ *         human-readable audit record lives in 0G Storage; this contract
+ *         anchors a tamper-evident pointer (the storage root hash) on
+ *         0G Chain so any third party can independently verify a settlement.
+ *
+ *         Deployed to 0G Chain (Galileo testnet, chainId 16602 / Aristotle
+ *         mainnet, chainId 16661). Only the backend settlement wallet (owner)
+ *         may write.
+ */
 contract OlaRegistry is Ownable {
+
     struct Settlement {
-        string direction; // "onramp" | "offramp"
-        string currency; // "NGN", "KES", etc.
-        uint256 amount; // USD value in cents (200 USDT == 20000)
-        string storageHash; // 0G Storage root hash of the full audit record
-        uint256 settledAt; // block.timestamp when logged
+        string  direction;      // "onramp" | "offramp"
+        string  currency;       // "NGN", "KES", "UGX", "TZS", "MWK", "BRL"
+        uint256 amount;         // USD value in cents (200 USDT => 20000)
+        string  storageHash;    // 0G Storage root hash of the audit record
+        uint256 settledAt;      // block.timestamp at log time
     }
 
     mapping(bytes32 => Settlement) public settlements;
@@ -29,12 +40,15 @@ contract OlaRegistry is Ownable {
 
     constructor(address _owner) Ownable(_owner) {}
 
-    /// @notice Log a completed settlement. Called by the backend wallet after Paycrest confirms.
-    /// @param orderId     keccak256 of our internal order UUID
-    /// @param direction   "onramp" or "offramp"
-    /// @param currency    fiat currency code
-    /// @param amount      USD value in cents
-    /// @param storageHash 0G Storage root hash of the full audit record
+    /**
+     * @notice Log a completed settlement. Called by the backend wallet after
+     *         Paycrest confirms `payment_order.settled`.
+     * @param orderId     sha256 of our internal order UUID (as bytes32)
+     * @param direction   "onramp" or "offramp"
+     * @param currency    fiat currency code
+     * @param amount      USD value in cents
+     * @param storageHash 0G Storage root hash of the full audit record
+     */
     function logSettlement(
         bytes32 orderId,
         string calldata direction,
@@ -44,12 +58,14 @@ contract OlaRegistry is Ownable {
     ) external onlyOwner {
         require(settlements[orderId].settledAt == 0, "Already logged");
 
+        // NOTE: no trailing comma after the final field — the original scope
+        // had `settledAt: block.timestamp,` which is a Solidity syntax error.
         settlements[orderId] = Settlement({
-            direction: direction,
-            currency: currency,
-            amount: amount,
+            direction:   direction,
+            currency:    currency,
+            amount:      amount,
             storageHash: storageHash,
-            settledAt: block.timestamp
+            settledAt:   block.timestamp
         });
 
         allOrderIds.push(orderId);

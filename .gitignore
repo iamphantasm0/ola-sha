@@ -1,38 +1,33 @@
-# Secrets / env
+# Secrets
 .env
-.env.*
-!.env.example
-.claude/mcp.json
+.env.local
+*.pem
+*.key
 
-# 0G agent skills (cloned, not committed)
+# 0G agent skills (cloned locally per Section A — never committed)
 .0g-skills/
 
 # Python
 __pycache__/
 *.py[cod]
-*.egg-info/
 .venv/
 venv/
 .pytest_cache/
-.mypy_cache/
+.ruff_cache/
 
 # Node
 node_modules/
 dist/
 .next/
 out/
-*.tsbuildinfo
 npm-debug.log*
-yarn-error.log*
 
-# Hardhat / contracts
+# Hardhat
 contracts/artifacts/
 contracts/cache/
 contracts/typechain-types/
-deployments/
 
 # Misc
 .DS_Store
 *.log
-logs.txt
-output/
+postgres_data/

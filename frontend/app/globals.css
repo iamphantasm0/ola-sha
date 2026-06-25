@@ -4,66 +4,20 @@
 
 html,
 body {
+  background-color: #080c10;
+  color: #e7edf3;
   height: 100%;
-  background: #14110d;
-  color: #ede7db;
-  font-family: var(--font-body), system-ui, sans-serif;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* Warm ambient glow behind the app chrome */
-.ola-bg {
-  background:
-    radial-gradient(60rem 40rem at 15% -10%, rgba(201, 162, 75, 0.08), transparent 60%),
-    radial-gradient(50rem 40rem at 110% 10%, rgba(111, 160, 107, 0.05), transparent 55%),
-    #14110d;
-}
-
-/* The "paper statement" surface — the concierge receipt lives here.
-   Use background-color (not the shorthand) so .paper-lines can compose its
-   background-image on top without wiping the cream. */
-.paper {
-  background-color: #f1ebde;
-  color: #2a241b;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.6) inset,
-    0 20px 50px -28px rgba(0, 0, 0, 0.75);
-}
-/* faint ledger lines on paper */
-.paper-lines {
-  background-image: linear-gradient(rgba(42, 36, 27, 0.05) 1px, transparent 1px);
-  background-size: 100% 1.7rem;
-  background-position: 0 3.4rem;
-}
-
-/* 0G notarized seal — the signature element */
-.seal {
-  border: 2px solid #c9a24b;
-  color: #9a7b2e;
-  border-radius: 9999px;
-  box-shadow: 0 0 0 3px rgba(201, 162, 75, 0.18);
-}
-
 ::-webkit-scrollbar {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2e2820;
-  border-radius: 9999px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    transition-duration: 0.001ms !important;
-  }
+  background: #222c37;
+  border-radius: 8px;
 }

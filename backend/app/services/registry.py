@@ -1,72 +1,87 @@
-"""Writes settlements to the OlaRegistry contract on 0G Chain via web3.py (async)."""
+"""
+0G Chain OrderRegistry writer.
 
-import logging
+web3.py is synchronous, so the signed send + receipt wait runs in a worker
+thread to avoid blocking the event loop. HTTP egress goes through the standard
+proxy (web3 uses requests under the hood), so this works from a firewalled
+environment as long as the RPC is HTTPS.
+"""
 
-from web3 import AsyncWeb3
-from web3.middleware import ExtraDataToPOAMiddleware
+import anyio
+from web3 import Web3
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
-
-# Minimal ABI — only what we call.
+# Minimal ABI — just what we call/read.
 REGISTRY_ABI = [
     {
-        "inputs": [
-            {"internalType": "bytes32", "name": "orderId", "type": "bytes32"},
-            {"internalType": "string", "name": "direction", "type": "string"},
-            {"internalType": "string", "name": "currency", "type": "string"},
-            {"internalType": "uint256", "name": "amount", "type": "uint256"},
-            {"internalType": "string", "name": "storageHash", "type": "string"},
-        ],
-        "name": "logSettlement",
-        "outputs": [],
-        "stateMutability": "nonpayable",
         "type": "function",
-    }
+        "name": "logSettlement",
+        "stateMutability": "nonpayable",
+        "inputs": [
+            {"name": "orderId", "type": "bytes32"},
+            {"name": "direction", "type": "string"},
+            {"name": "currency", "type": "string"},
+            {"name": "amount", "type": "uint256"},
+            {"name": "storageHash", "type": "string"},
+        ],
+        "outputs": [],
+    },
+    {
+        "type": "function",
+        "name": "totalSettlements",
+        "stateMutability": "view",
+        "inputs": [],
+        "outputs": [{"name": "", "type": "uint256"}],
+    },
 ]
 
 
-def order_id_to_bytes32(order_uuid: str) -> bytes:
-    """keccak256 of the internal order UUID — matches the contract's documented intent."""
-    return AsyncWeb3.keccak(text=str(order_uuid))
-
-
 async def log_to_registry(
-    order_uuid: str,
+    order_id_bytes: bytes,
     direction: str,
     currency: str,
     amount_cents: int,
     storage_hash: str,
 ) -> str:
-    if not settings.REGISTRY_CONTRACT_ADDRESS or not settings.PRIVATE_KEY:
-        raise RuntimeError("REGISTRY_CONTRACT_ADDRESS / PRIVATE_KEY not configured")
+    return await anyio.to_thread.run_sync(
+        _log_sync, order_id_bytes, direction, currency, amount_cents, storage_hash
+    )
 
-    w3 = AsyncWeb3(AsyncWeb3.AsyncHTTPProvider(settings.OG_CHAIN_RPC))
-    w3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
-    acct = w3.eth.account.from_key(settings.PRIVATE_KEY)
+def _log_sync(
+    order_id_bytes: bytes,
+    direction: str,
+    currency: str,
+    amount_cents: int,
+    storage_hash: str,
+) -> str:
+    if not settings.REGISTRY_CONTRACT_ADDRESS:
+        raise RuntimeError("REGISTRY_CONTRACT_ADDRESS not set — deploy the contract first.")
+
+    w3 = Web3(Web3.HTTPProvider(settings.OG_CHAIN_RPC))
+    acct = w3.eth.account.from_key(settings.DEPLOYER_PRIVATE_KEY)
     contract = w3.eth.contract(
-        address=AsyncWeb3.to_checksum_address(settings.REGISTRY_CONTRACT_ADDRESS),
+        address=Web3.to_checksum_address(settings.REGISTRY_CONTRACT_ADDRESS),
         abi=REGISTRY_ABI,
     )
 
-    order_id = order_id_to_bytes32(order_uuid)
-    nonce = await w3.eth.get_transaction_count(acct.address)
-    tx = await contract.functions.logSettlement(
-        order_id, direction, currency, amount_cents, storage_hash
+    tx = contract.functions.logSettlement(
+        order_id_bytes, direction, currency, int(amount_cents), storage_hash
     ).build_transaction(
         {
             "from": acct.address,
-            "nonce": nonce,
+            "nonce": w3.eth.get_transaction_count(acct.address),
             "chainId": settings.OG_CHAIN_ID,
+            "gas": 300000,
+            "gasPrice": w3.eth.gas_price,
         }
     )
 
     signed = acct.sign_transaction(tx)
-    tx_hash = await w3.eth.send_raw_transaction(signed.raw_transaction)
-    receipt = await w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
-    h = receipt.transactionHash.hex()
-    h = h if h.startswith("0x") else "0x" + h  # explorer-friendly + matches storage hash format
-    logger.info("logSettlement tx %s status=%s", h, receipt.status)
-    return h
+    tx_hash = w3.eth.send_raw_transaction(signed.raw_transaction)
+    w3.eth.wait_for_transaction_receipt(tx_hash, timeout=120)
+
+    # Normalize: hexbytes may or may not include the 0x prefix across versions.
+    h = tx_hash.hex()
+    return h if h.startswith("0x") else f"0x{h}"

@@ -1,67 +1,73 @@
-import { ZgFile, Indexer } from "@0gfoundation/0g-storage-ts-sdk";
 import { ethers } from "ethers";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
+import { Indexer, ZgFile } from "@0gfoundation/0g-ts-sdk";
+import { writeFile, readFile, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 
-// ─── 0G clients (private key ALWAYS from env, never hardcoded) ───────────────
-const RPC_URL = process.env.OG_STORAGE_RPC!;
-const INDEXER_URL = process.env.OG_STORAGE_INDEXER!;
-const PRIVATE_KEY = process.env.OG_STORAGE_PRIVATE_KEY!;
+/**
+ * 0G Storage helpers.
+ *
+ * Follows the upload/download pattern from the official starter kit:
+ *   https://github.com/0gfoundation/0g-storage-ts-starter-kit
+ *
+ * The SDK returns Go-style [value, error] tuples. ethers v6 is required
+ * (never v5). If your installed SDK version exposes slightly different
+ * symbols (e.g. `Blob` instead of `ZgFile`), adjust the imports here — the
+ * package name (@0gfoundation/0g-ts-sdk) is the confirmed one.
+ */
 
-if (!RPC_URL || !INDEXER_URL || !PRIVATE_KEY) {
-  throw new Error(
-    "Missing 0G storage env: OG_STORAGE_RPC, OG_STORAGE_INDEXER, OG_STORAGE_PRIVATE_KEY"
+const RPC = process.env.OG_STORAGE_RPC || "https://evmrpc-testnet.0g.ai";
+const INDEXER_RPC =
+  process.env.OG_STORAGE_INDEXER ||
+  "https://indexer-storage-testnet-turbo.0g.ai";
+const PRIVATE_KEY = process.env.OG_STORAGE_PRIVATE_KEY || "";
+
+if (!PRIVATE_KEY) {
+  console.warn(
+    "[zg] OG_STORAGE_PRIVATE_KEY is empty — uploads will fail until it is set."
   );
 }
 
-const provider = new ethers.JsonRpcProvider(RPC_URL);
-const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-const indexer = new Indexer(INDEXER_URL);
+const provider = new ethers.JsonRpcProvider(RPC);
+const signer = new ethers.Wallet(PRIVATE_KEY, provider);
+const indexer = new Indexer(INDEXER_RPC);
 
-/**
- * Store a JSON record on 0G Storage. Returns the Merkle root hash.
- * SDK requires a file path, so we write the JSON to a temp file first.
- * Always closes the file handle and removes the temp file in `finally`.
- */
+/** Write a JSON record to 0G Storage. Returns the Merkle root hash. */
 export async function storeRecord(record: unknown): Promise<string> {
-  const tempPath = path.join(os.tmpdir(), `ola-record-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
-  fs.writeFileSync(tempPath, JSON.stringify(record));
+  const path = join(tmpdir(), `ola-${randomUUID()}.json`);
+  await writeFile(path, JSON.stringify(record, null, 2), "utf-8");
 
-  const file = await ZgFile.fromFilePath(tempPath);
+  let file: ZgFile | undefined;
   try {
+    file = await ZgFile.fromFilePath(path);
+
     const [tree, treeErr] = await file.merkleTree();
-    if (treeErr) throw treeErr;
+    if (treeErr !== null) throw new Error(`merkleTree failed: ${treeErr}`);
+    const rootHash = tree?.rootHash();
+    if (!rootHash) throw new Error("merkleTree produced no root hash");
 
-    const rootHash = tree!.rootHash();
+    const [tx, uploadErr] = await indexer.upload(file, RPC, signer);
+    if (uploadErr !== null) throw new Error(`upload failed: ${uploadErr}`);
 
-    // upload() returns a [tx, err] tuple — it does NOT throw on logical errors.
-    // `wallet as any`: SDK .d.ts references ethers' CJS Signer type while we import
-    // the ESM build — a type-only dual-package clash, runtime is identical.
-    const [, uploadErr] = await indexer.upload(file, RPC_URL, wallet as any);
-    if (uploadErr) throw new Error(`0G upload failed: ${uploadErr.message ?? uploadErr}`);
-
-    return rootHash!;
+    console.log(`[zg] stored ${rootHash} (tx ${tx})`);
+    return rootHash;
   } finally {
-    await file.close();
-    fs.unlinkSync(tempPath);
+    if (file) await file.close();
+    await unlink(path).catch(() => {});
   }
 }
 
-/**
- * Retrieve a JSON record by root hash. Verified download (3rd param = true).
- * download() can THROW or return an error — always wrap in try/catch.
- */
+/** Read a JSON record back from 0G Storage by root hash. */
 export async function fetchRecord(rootHash: string): Promise<unknown> {
-  const outPath = path.join(os.tmpdir(), `ola-fetch-${Date.now()}.json`);
+  const path = join(tmpdir(), `ola-dl-${randomUUID()}.json`);
   try {
-    const err = await indexer.download(rootHash, outPath, true);
-    if (err) throw err;
-    const data = fs.readFileSync(outPath, "utf-8");
+    // (rootHash, outputPath, withProof)
+    const err = await indexer.download(rootHash, path, true);
+    if (err !== null) throw new Error(`download failed: ${err}`);
+    const data = await readFile(path, "utf-8");
     return JSON.parse(data);
-  } catch (error: any) {
-    throw new Error(`0G download failed: ${error.message ?? error}`);
   } finally {
-    if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+    await unlink(path).catch(() => {});
   }
 }
