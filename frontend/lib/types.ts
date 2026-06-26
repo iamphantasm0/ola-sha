@@ -67,6 +67,13 @@ export interface Settlement {
   chain_url: string | null;
   storage_record?: Record<string, any> | null;
   chain?: { verified: boolean; block?: number; contract?: string; events?: number };
+  matched_by?: "order_id" | "storage_hash" | "registry_tx_hash" | "paycrest_order_id";
+}
+
+export interface VerifyRecentResponse {
+  settlements: Settlement[];
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 // States where the backend is awaiting an external event — poll for updates.

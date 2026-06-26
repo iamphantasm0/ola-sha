@@ -40,6 +40,45 @@ class OrderRepository:
         return result.scalars().first()
 
     @staticmethod
+    async def get_settled_by_storage_hash(db: AsyncSession, storage_hash: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.storage_hash == storage_hash)
+            .where(Order.status == OrderStatus.SETTLED)
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_settled_by_registry_tx(db: AsyncSession, registry_tx_hash: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.registry_tx_hash == registry_tx_hash)
+            .where(Order.status == OrderStatus.SETTLED)
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_settled_by_id(db: AsyncSession, order_id: str) -> Optional[Order]:
+        try:
+            oid = uuid.UUID(str(order_id))
+        except (ValueError, TypeError):
+            return None
+        o = await db.get(Order, oid)
+        if not o or o.status != OrderStatus.SETTLED or not o.storage_hash:
+            return None
+        return o
+
+    @staticmethod
+    async def get_settled_by_paycrest_id(db: AsyncSession, paycrest_id: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.paycrest_order_id == paycrest_id)
+            .where(Order.status == OrderStatus.SETTLED)
+            .where(Order.storage_hash.isnot(None))
+        )
+        return result.scalars().first()
+
+    @staticmethod
     async def list_pollable(db: AsyncSession) -> list[Order]:
         """Non-terminal orders that have a Paycrest id — i.e. awaiting/processing.
 

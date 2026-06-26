@@ -1,5 +1,5 @@
 import { authHeaders } from "./auth";
-import { Action, ChatResponse, OrderState, SavedBank, SavedWallet, Settlement } from "./types";
+import { Action, ChatResponse, OrderState, SavedBank, SavedWallet, Settlement, VerifyRecentResponse } from "./types";
 
 const BASE = "/api/backend";
 
@@ -67,8 +67,13 @@ export function addWallet(address: string, network: string, label?: string) {
 }
 
 // ─── Public verify ───────────────────────────────────────────────────────────
-export function verifyRecent() {
-  return req<{ settlements: Settlement[] }>("verify/recent");
+export function verifyRecent(cursor?: string, limit = 8) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return req<VerifyRecentResponse>(`verify/recent?${params}`);
+}
+export function verifyLookup(id: string) {
+  return req<Settlement>(`verify/lookup?q=${encodeURIComponent(id.trim())}`);
 }
 export function verifyOrder(orderId: string) {
   return req<Settlement>(`verify/order/${orderId}`);

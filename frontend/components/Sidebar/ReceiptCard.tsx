@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { OrderState } from "../../lib/types";
 
 const STORAGE_SCAN = "https://storagescan-galileo.0g.ai/tx";
@@ -44,6 +45,15 @@ export function ReceiptCard({ order }: { order: OrderState }) {
           <HashRow label="0G Chain settlement" value={order.registry_tx_hash} href={`${CHAIN_SCAN}/${order.registry_tx_hash}`} />
         )}
       </div>
+
+      {(order.storage_hash || order.registry_tx_hash) && (
+        <Link
+          href={`/verify?id=${encodeURIComponent(order.storage_hash ?? order.registry_tx_hash ?? "")}`}
+          className="mt-3 inline-block text-[11px] text-paper-ink underline decoration-gold/40 underline-offset-2 hover:decoration-gold"
+        >
+          Verify live on Ola →
+        </Link>
+      )}
     </div>
   );
 }
