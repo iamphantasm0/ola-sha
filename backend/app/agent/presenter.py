@@ -52,7 +52,7 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
     if tool_name == "confirm_onramp":
         return (
             "Confirmed. ✅\n\n"
-            "Now send me your **wallet address** and the **network** "
+            "Choose a saved wallet below, or add one — "
             "(Base, Arbitrum, Polygon, or Ethereum — Base is cheapest)."
         )
 

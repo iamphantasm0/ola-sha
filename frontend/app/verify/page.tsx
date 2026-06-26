@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useCallback, useEffect, useState } from "react";
+import { OgRegistryStats } from "../../components/OgRegistryStats";
 import { verifyLookup, verifyOrder, verifyRecent } from "../../lib/api";
 import { Settlement } from "../../lib/types";
 
@@ -239,6 +240,10 @@ function VerifyPageContent() {
           <b className="text-text">0G Chain</b>. Search by ID or pick from recent settlements below.
           No wallet, no login.
         </p>
+
+        <div className="mt-6">
+          <OgRegistryStats variant="full" />
+        </div>
 
         <form onSubmit={onSearch} className="mt-8">
           <label htmlFor="verify-search" className="text-[11px] uppercase tracking-[0.14em] text-muted">

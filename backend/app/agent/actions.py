@@ -22,12 +22,26 @@ def _wallet_label(w: SavedWallet) -> str:
     return f"{name} ({w.network})"
 
 
+def _onramp_wallet_actions(wallets: list[SavedWallet]) -> list[dict]:
+    acts = [
+        {"type": "use_saved_wallet", "label": _wallet_label(w), "payload": {"saved_id": str(w.id)}}
+        for w in wallets
+    ]
+    acts.append({
+        "type": "enter_wallet",
+        "label": "Add a wallet" if not wallets else "Use a different wallet",
+    })
+    acts.append({"type": "cancel", "label": "Cancel"})
+    return acts
+
+
 def build_actions(
     order: Optional[Order],
     banks: Optional[list[SavedBankAccount]] = None,
     wallets: Optional[list[SavedWallet]] = None,
     *,
     bank_already_saved: bool = False,
+    wallet_already_saved: bool = False,
 ) -> list[dict]:
     if not order:
         return []
@@ -59,19 +73,17 @@ def build_actions(
         acts.append({"type": "cancel", "label": "Cancel"})
         return acts
 
-    if status == OrderStatus.ONRAMP_QUOTING:
-        acts = [
-            {"type": "use_saved_wallet", "label": _wallet_label(w), "payload": {"saved_id": str(w.id)}}
-            for w in wallets
-        ]
-        acts.append({"type": "enter_wallet", "label": "Use a different wallet"})
-        acts.append({"type": "cancel", "label": "Cancel"})
-        return acts
+    if status in (OrderStatus.ONRAMP_QUOTING, OrderStatus.ONRAMP_COLLECTING_WALLET):
+        return _onramp_wallet_actions(wallets)
 
     if status == OrderStatus.ONRAMP_AWAITING_PAYMENT:
-        return [
+        acts = []
+        if not wallet_already_saved:
+            acts.append({"type": "save_wallet", "label": "Save this wallet"})
+        acts.extend([
             {"type": "check_status", "label": "I've paid"},
             {"type": "cancel", "label": "Cancel"},
-        ]
+        ])
+        return acts
 
     return []

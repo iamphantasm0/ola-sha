@@ -45,8 +45,8 @@ Create an account (email + password) to **save your bank and wallet** — next t
 tap. You can transact without an account too.
 
 ### Verify any settlement on 0G (no wallet or login needed)
-There's a public **[Verify page](https://ola-sha.up.railway.app/verify)** — pick any settlement and
-hit **"Verify live"**: it re-fetches the audit record from **0G Storage** and confirms the settlement
+There's a public **Verify page** at `/verify` — search by order ID, storage hash, or chain tx;
+shareable `/verify?id=` links; **Verify live** re-fetches the audit record from **0G Storage** and confirms the settlement
 tx on **0G Chain**, in real time, against the network itself.
 
 The receipt also shows two **public explorer** links:
@@ -187,6 +187,11 @@ the same logic in `app/services/settlement.py`:
 - **Paycrest** is mainnet-only with a $0.50 minimum — the live demo moves small real funds.
 - MVP creates DB tables on startup; swap for Alembic migrations before production.
 
+## Changelog
+
+Round of 32 updates (verify search, stats, inline proof, PDF receipts, history tab): see
+[CHANGELOG.md](CHANGELOG.md).
+
 ## Roadmap
 
 Ola is a Zero Cup 2026 entry (a 6-round knockout: Group Stage → Round of 32 → 16 → QF → SF → Final).
@@ -198,10 +203,12 @@ Plan by round:
   in the OlaRegistry `OrderSettled` event)
 
 **Knockout rounds — raise the bar:**
-- **Verify-a-receipt page** — public, no wallet: paste an order/hash, see the 0G Storage + Chain
-  proof resolve. Turns the "verifiable settlement" angle into something judges can touch.
-- **Deepen the 0G story** — surface on-chain stats from the contract (`totalSettlements`), store the
-  full audit trail on 0G Storage, explore 0G DA. Make Ola un-buildable without 0G.
+- ✅ **Verify-a-receipt page** — public `/verify` with search-by-ID, `/verify?id=` shareable links,
+  live Storage + Chain proof, paginated recent list.
+- ✅ **Deepen the 0G story (partial)** — on-chain stats dashboard (`totalSettlements` + volume/corridors
+  on home + verify); inline `SettlementProofCard` in chat at settlement. Still open: fuller audit
+  trail on Storage, 0G DA exploration.
+- ▢ **Agent tool-call trace** — structured "what Ola did" log (tool names + masked args), not raw CoT.
 - **Polish** — statement panel on mobile, a standalone saved-accounts manager, error states, and the
   minimax latency (faster model or a more intentional "thinking" state).
 - **Pitch** — sharpen the README "why this wins" + a short deck for later rounds.

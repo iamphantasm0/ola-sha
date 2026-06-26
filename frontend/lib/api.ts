@@ -1,5 +1,15 @@
 import { authHeaders } from "./auth";
-import { Action, ChatResponse, OrderState, SavedBank, SavedWallet, Settlement, VerifyRecentResponse } from "./types";
+import {
+  Action,
+  ChatResponse,
+  OrderHistoryResponse,
+  OrderState,
+  RegistryStats,
+  SavedBank,
+  SavedWallet,
+  Settlement,
+  VerifyRecentResponse,
+} from "./types";
 
 const BASE = "/api/backend";
 
@@ -9,10 +19,16 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
     headers: { "Content-Type": "application/json", ...authHeaders(), ...(opts.headers || {}) },
   });
   if (!res.ok) {
-    let detail = `${res.status}`;
+    let detail = `Request failed (${res.status})`;
     try {
-      detail = (await res.json()).detail || detail;
-    } catch {}
+      const body = await res.json();
+      const raw = body?.detail;
+      if (typeof raw === "string") detail = raw;
+      else if (Array.isArray(raw)) detail = raw.map((d: { msg?: string }) => d.msg ?? "Invalid request").join(", ");
+      else if (raw != null) detail = String(raw);
+    } catch {
+      /* non-JSON body */
+    }
     throw new Error(detail);
   }
   return res.json();
@@ -49,6 +65,12 @@ export function fetchOrder(orderId: string, sessionId: string) {
   return req<OrderState>(`orders/${orderId}`, { headers: { "x-session-id": sessionId } });
 }
 
+export function fetchOrderHistory(cursor?: string, limit = 20) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set("cursor", cursor);
+  return req<OrderHistoryResponse>(`orders/history?${params}`);
+}
+
 // ─── Saved accounts ──────────────────────────────────────────────────────────
 export function listAccounts() {
   return req<{ bank_accounts: SavedBank[]; wallets: SavedWallet[] }>("accounts");
@@ -64,6 +86,11 @@ export function addWallet(address: string, network: string, label?: string) {
     method: "POST",
     body: JSON.stringify({ address, network, label }),
   });
+}
+
+// ─── Public on-chain stats ───────────────────────────────────────────────────
+export function fetchRegistryStats() {
+  return req<RegistryStats>("stats/registry");
 }
 
 // ─── Public verify ───────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { Fragment, ReactNode } from "react";
-import { ChatMessage } from "../../lib/types";
+import { ChatMessage, OrderState } from "../../lib/types";
+import { SettlementProofCard } from "./SettlementProofCard";
 
 // Minimal inline markdown: **bold**, *italic*, `code`. Newlines are preserved by
 // whitespace-pre-wrap on the container, so the deterministic presenter's line breaks
@@ -34,7 +35,13 @@ function renderInline(text: string): ReactNode {
   });
 }
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+export function MessageBubble({
+  message,
+  order,
+}: {
+  message: ChatMessage;
+  order?: OrderState | null;
+}) {
   const isUser = message.role === "user";
   return (
     <div className={`flex animate-riseIn ${isUser ? "justify-end" : "justify-start"}`}>
@@ -51,6 +58,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           </span>
         )}
         {isUser ? message.content : renderInline(message.content)}
+        {!isUser && message.proof && <SettlementProofCard proof={message.proof} order={order} />}
       </div>
     </div>
   );

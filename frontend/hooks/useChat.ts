@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchOrder, sendAction, sendChat } from "../lib/api";
 import { getSessionId, resetSession } from "../lib/session";
-import { Action, ChatMessage, OrderState, POLLING_STATES, TERMINAL_STATES } from "../lib/types";
+import { Action, ChatMessage, OrderState, POLLING_STATES, SettlementProof, TERMINAL_STATES } from "../lib/types";
 
 const GREETING: ChatMessage = {
   role: "assistant",
@@ -18,6 +18,24 @@ export function useChat() {
   const [loading, setLoading] = useState(false);
   const sessionRef = useRef<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const proofShownRef = useRef<Set<string>>(new Set());
+
+  const proofFromOrder = (o: OrderState): SettlementProof | undefined => {
+    if (o.status !== "SETTLED" || (!o.storage_hash && !o.registry_tx_hash)) return undefined;
+    return {
+      order_id: o.order_id,
+      storage_hash: o.storage_hash,
+      registry_tx_hash: o.registry_tx_hash,
+    };
+  };
+
+  const appendAssistant = useCallback((content: string, proof?: SettlementProof) => {
+    if (proof) {
+      if (proofShownRef.current.has(proof.order_id)) return;
+      proofShownRef.current.add(proof.order_id);
+    }
+    setMessages((m) => [...m, { role: "assistant", content, proof }]);
+  }, []);
 
   useEffect(() => {
     sessionRef.current = getSessionId();
@@ -40,23 +58,35 @@ export function useChat() {
         if (TERMINAL_STATES.has(fresh.status) || !POLLING_STATES.has(fresh.status)) stopPolling();
         if (fresh.status === "SETTLED") {
           setActions([]);
-          setMessages((m) => [
-            ...m,
-            {
-              role: "assistant",
-              content: `Settled. ✅ Receipt on 0G.\nStorage hash: ${fresh.storage_hash ?? "—"}`,
-            },
-          ]);
+          const proof = proofFromOrder(fresh);
+          if (proof) {
+            appendAssistant(
+              "Settled. ✅ Your transaction is complete — notarized on 0G Storage and logged on 0G Chain.",
+              proof,
+            );
+          }
         }
       } catch {
         /* transient */
       }
     }, 3000);
     return stopPolling;
-  }, [order, stopPolling]);
+  }, [order, stopPolling, appendAssistant]);
 
   const apply = useCallback((res: { reply: string; order_state: OrderState | null; actions: Action[] }) => {
-    setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
+    const proof = res.order_state ? proofFromOrder(res.order_state) : undefined;
+    let content = res.reply;
+    if (proof && res.order_state?.status === "SETTLED" && !proofShownRef.current.has(proof.order_id)) {
+      if (!content.toLowerCase().includes("settled")) {
+        content = `${content}\n\nSettled. ✅ Notarized on 0G.`;
+      }
+    }
+    if (proof && !proofShownRef.current.has(proof.order_id)) {
+      proofShownRef.current.add(proof.order_id);
+      setMessages((m) => [...m, { role: "assistant", content, proof }]);
+    } else {
+      setMessages((m) => [...m, { role: "assistant", content }]);
+    }
     setOrder(res.order_state);
     setActions(res.actions || []);
   }, []);
@@ -92,6 +122,7 @@ export function useChat() {
     stopPolling();
     resetSession();
     sessionRef.current = getSessionId();
+    proofShownRef.current.clear();
     setMessages([GREETING]);
     setOrder(null);
     setActions([]);
