@@ -189,8 +189,7 @@ the same logic in `app/services/settlement.py`:
 
 ## Changelog
 
-Round of 32 updates (verify search, stats, inline proof, PDF receipts, history tab): see
-[CHANGELOG.md](CHANGELOG.md).
+Round of 32 updates: [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

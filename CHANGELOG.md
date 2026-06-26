@@ -1,7 +1,10 @@
 # Changelog
 
-All notable changes to Ola for Zero Cup 2026 submissions. Group Stage was submitted **2026-06-19**
-from `main` / early deploy. Round of 32 ships from branch **`feat/cognee-memory`** unless noted.
+All notable changes to Ola for Zero Cup 2026 submissions.
+
+**Group Stage:** first submit **2026-06-19**, final update before close **2026-06-24** (under
+review; winners **2026-06-27**). **Round of 32** ships from branch **`feat/cognee-memory`**;
+submit by **2026-06-28**.
 
 ---
 
@@ -75,9 +78,10 @@ Ola is a stablecoin concierge: chat-driven onramp/offramp with **verifiable sett
 
 ---
 
-## Group Stage — submitted 2026-06-19
+## Group Stage — submit 2026-06-19 · close 2026-06-24
 
 - Live deployed app on Railway with real Paycrest settlement
+- Package updated before Jun 24 deadline (version judges review pre–Jun 27 results)
 - End-to-end offramp/onramp state machine with deterministic money UI (buttons, not chat guesses)
 - **0G Compute** (minimax-m3, tool-calling), **0G Storage** (audit record), **0G Chain**
   (`OlaRegistry` settlement log with embedded storage hash)
