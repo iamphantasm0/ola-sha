@@ -33,6 +33,14 @@ ALL_TOOLS = {
                         "enum": CURRENCIES,
                         "description": "Local currency to receive. Default NGN.",
                     },
+                    "network": {
+                        "type": "string",
+                        "enum": NETWORKS,
+                        "description": (
+                            "Blockchain the user will send stablecoin FROM (e.g. arbitrum when "
+                            "they say 'on arb'). Defaults to base."
+                        ),
+                    },
                 },
                 "required": ["token", "amount", "currency"],
             },

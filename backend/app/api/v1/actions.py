@@ -106,8 +106,18 @@ async def action(
 
     elif a == "submit_wallet":
         refund = await _refund_bank(db, user, order.currency)
-        res = await orders_flow.create_onramp(db, order, provider, req.session_id, p.get("address", ""), p.get("network", ""), *refund)
+        address, network = p.get("address", ""), p.get("network", "")
+        res = await orders_flow.create_onramp(db, order, provider, req.session_id, address, network, *refund)
+        if user and address and network and "error" not in res:
+            await AccountRepository.add_wallet(db, user.id, address, network)
         reply = _render("submit_wallet_address", res)
+
+    elif a == "save_wallet":
+        if not user:
+            raise HTTPException(status_code=401, detail="Login required")
+        if order.wallet_address and order.network:
+            await AccountRepository.add_wallet(db, user.id, order.wallet_address, order.network)
+        reply = "Saved. ✅ I'll offer this wallet next time."
 
     elif a == "check_status":
         if order.paycrest_order_id:
@@ -124,5 +134,5 @@ async def action(
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {a}")
 
-    order = await OrderRepository.get_latest_by_session(db, req.session_id)
+    order = await OrderRepository.get_by_id(db, str(order.id))
     return await assemble_response(db, order, user, reply)

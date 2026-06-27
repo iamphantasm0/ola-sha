@@ -41,6 +41,7 @@ def order_state_json(order: Optional[Order]) -> Optional[dict]:
         "bank_name": order.bank_name,
         "account_number": order.account_number,
         "deposit_address": order.deposit_address,
+        "network": order.network,
         "storage_hash": order.storage_hash,
         "registry_tx_hash": order.registry_tx_hash,
         "paycrest_order_id": order.paycrest_order_id,
@@ -58,6 +59,7 @@ async def assemble_response(
     banks: list = []
     wallets: list = []
     bank_already_saved = False
+    wallet_already_saved = False
     if user and order:
         banks = await AccountRepository.list_banks(db, user.id)
         wallets = await AccountRepository.list_wallets(db, user.id)
@@ -66,7 +68,16 @@ async def assemble_response(
                 db, user.id, order.currency, order.institution_code, order.account_number
             )
             bank_already_saved = existing is not None
-    actions = build_actions(order, banks, wallets, bank_already_saved=bank_already_saved)
+        if order.wallet_address and order.network:
+            wallet_already_saved = any(
+                w.address.lower() == order.wallet_address.lower() and w.network == order.network
+                for w in wallets
+            )
+    actions = build_actions(
+        order, banks, wallets,
+        bank_already_saved=bank_already_saved,
+        wallet_already_saved=wallet_already_saved,
+    )
     return {
         "reply": reply,
         "order_state": order_state_json(order),

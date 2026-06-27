@@ -26,7 +26,10 @@ async def get_current_user(
     user_id = decode_token(token) if token else None
     if not user_id:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    user = await db.get(User, uuid.UUID(user_id))
+    try:
+        user = await db.get(User, uuid.UUID(user_id))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Not authenticated")
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     return user

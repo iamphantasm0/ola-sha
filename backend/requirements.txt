@@ -10,3 +10,5 @@ pydantic-settings==2.4.0
 python-dotenv==1.0.1
 bcrypt==4.2.0
 PyJWT==2.9.0
+# Cognee memory runs in a separate service (memory-sidecar) to keep these deps isolated;
+# the backend only talks to it over HTTP via httpx (already a dependency above).

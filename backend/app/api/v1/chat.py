@@ -18,6 +18,7 @@ from app.core.db import get_db
 from app.core.dependencies import get_optional_user
 from app.models.user import User
 from app.providers.paycrest import PaycrestProvider
+from app.services.memory import dataset_for_user, recall_context
 from app.repositories.conversations import ConversationRepository
 from app.repositories.orders import OrderRepository
 from app.repositories.sessions import SessionRepository
@@ -67,8 +68,14 @@ async def chat(
     allowed = TOOLS_BY_STATE.get(current_state, [])
     tools = [ALL_TOOLS[name] for name in allowed] or None
 
+    # Personalize the opening only: recall is an extra LLM call, so we skip it mid-transaction.
+    # Returns "" for new/anonymous users or if the memory layer is unavailable (degrades silently).
+    memory_context = ""
+    if current_state == "IDLE":
+        memory_context = await recall_context(dataset_for_user(user, req.session_id), req.message)
+
     messages = [
-        {"role": "system", "content": build_system_prompt(current_state, order)},
+        {"role": "system", "content": build_system_prompt(current_state, order, memory_context)},
         *history,
         {"role": "user", "content": req.message},
     ]
@@ -91,6 +98,11 @@ async def chat(
             tool_args = json.loads(tc.function.arguments or "{}")
         except json.JSONDecodeError:
             tool_args = {}
+
+        if tc.function.name == "get_offramp_quote" and not tool_args.get("network"):
+            inferred = PaycrestProvider.infer_network_from_text(req.message)
+            if inferred:
+                tool_args["network"] = inferred
 
         tool_result = await dispatch_tool_call(
             tool_name=tc.function.name,
@@ -122,7 +134,7 @@ async def chat(
     reply = _strip_reasoning(reply)
     await ConversationRepository.add_message(db, req.session_id, "assistant", reply)
 
-    order = await OrderRepository.get_latest_by_session(db, req.session_id)
-    # Bind a freshly-created (anonymous) order to the authenticated caller.
+    # Return the in-progress order only — never a prior SETTLED/CANCELLED order from this session.
+    order = await OrderRepository.get_active_by_session(db, req.session_id)
     await ensure_order_access(db, order, user)
     return await assemble_response(db, order, user, reply, tool_called)

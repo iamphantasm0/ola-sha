@@ -1,0 +1,7 @@
+# Cognee memory service — isolated from the backend so cognee's heavy/newer deps
+# (openai 2.x, fastapi 0.13x, lancedb, kuzu, baml) never touch the main app.
+# Versions validated against cognee 1.2.1 on 2026-06-22.
+cognee[baml]==1.2.1
+fastembed==0.8.0
+fastapi==0.138.0
+uvicorn[standard]==0.34.0

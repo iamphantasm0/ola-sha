@@ -36,3 +36,6 @@ deployments/
 *.log
 logs.txt
 output/
+
+# Local planning docs live in the private Obsidian vault, never the public repo
+plans/

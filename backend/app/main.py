@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import accounts, actions, auth, chat, orders, verify, webhooks
+from app.api.v1 import accounts, actions, auth, chat, orders, privacy, stats, verify, webhooks
 from app.core.db import engine
 from app.models import Base
 from app.services.reconciler import run_reconciler
@@ -44,7 +44,9 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(actions.router, prefix="/api/v1")
 app.include_router(orders.router, prefix="/api/v1")
 app.include_router(verify.router, prefix="/api/v1")
+app.include_router(stats.router, prefix="/api/v1")
 app.include_router(webhooks.router, prefix="/api/v1")
+app.include_router(privacy.router, prefix="/api/v1")
 
 
 @app.get("/health")

@@ -1,8 +1,15 @@
 export type Role = "user" | "assistant";
 
+export interface SettlementProof {
+  order_id: string;
+  storage_hash: string | null;
+  registry_tx_hash: string | null;
+}
+
 export interface ChatMessage {
   role: Role;
   content: string;
+  proof?: SettlementProof;
 }
 
 export interface Action {
@@ -24,9 +31,21 @@ export interface OrderState {
   bank_name?: string | null;
   account_number?: string | null;
   deposit_address: string | null;
+  network?: string | null;
   storage_hash: string | null;
   registry_tx_hash: string | null;
   paycrest_order_id: string | null;
+}
+
+export interface HistoryOrder extends OrderState {
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface OrderHistoryResponse {
+  orders: HistoryOrder[];
+  next_cursor: string | null;
+  has_more: boolean;
 }
 
 export interface ChatResponse {
@@ -67,6 +86,33 @@ export interface Settlement {
   chain_url: string | null;
   storage_record?: Record<string, any> | null;
   chain?: { verified: boolean; block?: number; contract?: string; events?: number };
+  matched_by?: "order_id" | "storage_hash" | "registry_tx_hash" | "paycrest_order_id";
+}
+
+export interface VerifyRecentResponse {
+  settlements: Settlement[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+export interface RegistryCorridor {
+  currency: string;
+  count: number;
+  volume_usd: number;
+}
+
+export interface RegistryStats {
+  configured: boolean;
+  live: boolean;
+  contract_address: string | null;
+  contract_url: string | null;
+  total_settlements: number;
+  total_volume_usd: number;
+  events_indexed?: number;
+  corridors: RegistryCorridor[];
+  by_direction: { onramp: number; offramp: number };
+  fetched_at?: string;
+  error?: string | null;
 }
 
 // States where the backend is awaiting an external event — poll for updates.

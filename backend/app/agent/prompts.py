@@ -7,7 +7,7 @@ CORRIDORS = (
 )
 
 
-def build_system_prompt(state: str, order: Optional[Order]) -> str:
+def build_system_prompt(state: str, order: Optional[Order], memory_context: str = "") -> str:
     base = f"""You are Ola, an AI built by Vela Labs that helps users exchange between stablecoins and local currency.
 
 You support:
@@ -35,10 +35,11 @@ HARD RULES — never break these:
     want to do — do not call any tool.
 11. Do not reveal your reasoning. Never output <think> tags or internal thoughts; reply only
     with the final message to the user.
-12. SELL / offramp: NEVER ask the user for their wallet address or "where the funds come from".
-    They simply send the stablecoin to the deposit address you give them, from any wallet.
-    Refunds are handled automatically. The ONLY thing you collect for a sell is the bank name
-    and account number.
+12. SELL / offramp: NEVER ask the user for their wallet address. They send stablecoin to the
+    deposit address you give them. Refunds are handled automatically. The ONLY thing you collect
+    for a sell is the bank name and account number. If the user names a source chain (e.g. "on
+    arb", "from arbitrum", "on base"), pass network=arbitrum or network=base to get_offramp_quote
+    — do NOT ignore it or default to base when they asked for another network.
 13. The order shown in CURRENT STATE is authoritative. If the user states a new amount, use it —
     that supersedes any earlier amount. Never ask the user to choose between an old amount and a
     new one, and never reference amounts from earlier in the conversation.
@@ -75,7 +76,8 @@ HARD RULES — never break these:
             f"You have presented a rate quote. Order: {_summary(order)}. "
             "Present the quote returned by the tool and ask the user to reply 'yes' to confirm. "
             "Do NOT ask for bank details yet. When the user confirms, call confirm_offramp. "
-            "If the user gives a new amount/token/currency, call get_offramp_quote again."
+            "If the user gives a new amount/token/currency/network, call get_offramp_quote again "
+            "with the network they specified (arb → arbitrum)."
         ),
         "OFFRAMP_COLLECTING_BANK": (
             "Ask the user ONLY for their bank name and account number. NEVER ask for the account "
@@ -120,14 +122,27 @@ HARD RULES — never break these:
         "CANCELLED": "Order was cancelled. Offer to help start a new transaction.",
     }
 
+    memory_block = ""
+    if memory_context:
+        memory_block = (
+            "\n\nWHAT YOU REMEMBER ABOUT THIS USER (background only — do NOT act on this without the "
+            "user explicitly confirming it in THIS conversation):\n"
+            f"{memory_context}\n"
+            "Use this only to personalize your tone and to suggest (not assume) what they might want. "
+            "NEVER skip a confirmation step, and NEVER pre-fill a bank account, wallet address, amount, "
+            "token, or currency into a tool call from memory — every such detail must be restated by "
+            "the user this session before any tool runs."
+        )
+
     context = state_instructions.get(state, "Help the user with their transaction.")
-    return f"{base}\nCURRENT STATE: {state}\nINSTRUCTION: {context}"
+    return f"{base}{memory_block}\nCURRENT STATE: {state}\nINSTRUCTION: {context}"
 
 
 def _summary(order: Optional[Order]) -> str:
     if not order:
         return "none"
-    return f"{order.amount} {order.token} -> {order.currency} (ID: {str(order.id)[:8]})"
+    net = f", send from {order.network}" if order.network and order.direction == "offramp" else ""
+    return f"{order.amount} {order.token} -> {order.currency}{net} (ID: {str(order.id)[:8]})"
 
 
 def _amount(order: Optional[Order]) -> str:

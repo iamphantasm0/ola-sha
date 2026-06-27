@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { OrderState } from "../../lib/types";
+import { DownloadReceiptButton } from "./DownloadReceiptButton";
 
 const STORAGE_SCAN = "https://storagescan-galileo.0g.ai/tx";
 const CHAIN_SCAN = "https://chainscan-galileo.0g.ai/tx";
@@ -43,6 +45,18 @@ export function ReceiptCard({ order }: { order: OrderState }) {
         {order.registry_tx_hash && (
           <HashRow label="0G Chain settlement" value={order.registry_tx_hash} href={`${CHAIN_SCAN}/${order.registry_tx_hash}`} />
         )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        {(order.storage_hash || order.registry_tx_hash) && (
+          <Link
+            href={`/verify?id=${encodeURIComponent(order.storage_hash ?? order.registry_tx_hash ?? "")}`}
+            className="text-[11px] text-paper-ink underline decoration-gold/40 underline-offset-2 hover:decoration-gold"
+          >
+            Verify live on Ola →
+          </Link>
+        )}
+        <DownloadReceiptButton order={order} />
       </div>
     </div>
   );

@@ -28,7 +28,7 @@ export function ActionButtons({
 
   if (!actions.length && !form) return null;
 
-  const AUTH_REQUIRED = new Set(["use_saved_bank", "use_saved_wallet", "save_bank"]);
+  const AUTH_REQUIRED = new Set(["use_saved_bank", "use_saved_wallet", "save_bank", "save_wallet"]);
 
   const click = (a: Action) => {
     if (a.type === "enter_bank") return setForm("bank");
@@ -89,7 +89,7 @@ export function ActionButtons({
             }}
             className="rounded-lg bg-gold px-3.5 py-1.5 text-sm font-medium text-ink disabled:opacity-40"
           >
-            Use wallet
+            Add wallet
           </button>
           <button onClick={() => setForm(null)} className="rounded-lg px-3 py-1.5 text-sm text-muted hover:text-text">
             Back

@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     STORAGE_SIDECAR_URL: str = "http://storage-sidecar:3001"
     SIDECAR_AUTH_TOKEN: str = ""
 
+    # Cognee memory sidecar (per-user memory; isolates cognee's deps from the backend)
+    MEMORY_SIDECAR_URL: str = "http://memory-sidecar:3002"
+
     # 0G Chain
     OG_CHAIN_RPC: str = "https://evmrpc-testnet.0g.ai"
     OG_CHAIN_ID: int = 16602

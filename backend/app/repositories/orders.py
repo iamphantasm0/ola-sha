@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import select
@@ -30,7 +31,11 @@ class OrderRepository:
 
     @staticmethod
     async def get_by_id(db: AsyncSession, order_id: str) -> Optional[Order]:
-        return await db.get(Order, uuid.UUID(str(order_id)))
+        try:
+            oid = uuid.UUID(str(order_id))
+        except (ValueError, TypeError):
+            return None
+        return await db.get(Order, oid)
 
     @staticmethod
     async def get_by_paycrest_id(db: AsyncSession, paycrest_id: str) -> Optional[Order]:
@@ -38,6 +43,70 @@ class OrderRepository:
             select(Order).where(Order.paycrest_order_id == paycrest_id)
         )
         return result.scalars().first()
+
+    @staticmethod
+    async def get_settled_by_storage_hash(db: AsyncSession, storage_hash: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.storage_hash == storage_hash)
+            .where(Order.status == OrderStatus.SETTLED)
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_settled_by_registry_tx(db: AsyncSession, registry_tx_hash: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.registry_tx_hash == registry_tx_hash)
+            .where(Order.status == OrderStatus.SETTLED)
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def get_settled_by_id(db: AsyncSession, order_id: str) -> Optional[Order]:
+        try:
+            oid = uuid.UUID(str(order_id))
+        except (ValueError, TypeError):
+            return None
+        o = await db.get(Order, oid)
+        if not o or o.status != OrderStatus.SETTLED or not o.storage_hash:
+            return None
+        return o
+
+    @staticmethod
+    async def get_settled_by_paycrest_id(db: AsyncSession, paycrest_id: str) -> Optional[Order]:
+        result = await db.execute(
+            select(Order)
+            .where(Order.paycrest_order_id == paycrest_id)
+            .where(Order.status == OrderStatus.SETTLED)
+            .where(Order.storage_hash.isnot(None))
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def list_by_user(
+        db: AsyncSession,
+        user_id,
+        *,
+        limit: int = 20,
+        cursor: Optional[datetime] = None,
+    ) -> tuple[list[Order], Optional[str], bool]:
+        """Paginated ramp history for a logged-in user (newest first)."""
+        uid = uuid.UUID(str(user_id))
+        q = (
+            select(Order)
+            .where(Order.user_id == uid)
+            .where(Order.direction.isnot(None))
+            .order_by(Order.created_at.desc())
+        )
+        if cursor:
+            q = q.where(Order.created_at < cursor)
+        q = q.limit(limit + 1)
+        rows = list((await db.execute(q)).scalars().all())
+        has_more = len(rows) > limit
+        page = rows[:limit]
+        next_cursor = page[-1].created_at.isoformat() if has_more and page else None
+        return page, next_cursor, has_more
 
     @staticmethod
     async def list_pollable(db: AsyncSession) -> list[Order]:
@@ -64,6 +133,7 @@ class OrderRepository:
         rate: float,
         output_amount: float,
         status: OrderStatus,
+        network: str | None = None,
     ) -> Order:
         """Create a pending order from a quote AND set the QUOTING state."""
         order = Order(
@@ -75,6 +145,7 @@ class OrderRepository:
             rate=rate,
             output_amount=output_amount,
             status=status,
+            network=network,
         )
         db.add(order)
         await db.commit()

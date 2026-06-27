@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 async function forward(req: NextRequest, path: string[]) {
-  const url = `${BACKEND}/api/v1/${path.join("/")}`;
+  const url = `${BACKEND}/api/v1/${path.join("/")}${req.nextUrl.search}`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const auth = req.headers.get("authorization");
   if (auth) headers["Authorization"] = auth;

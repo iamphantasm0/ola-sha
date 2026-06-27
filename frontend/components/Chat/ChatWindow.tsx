@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Action, ChatMessage } from "../../lib/types";
+import { Action, ChatMessage, OrderState } from "../../lib/types";
 import { MessageBubble } from "./MessageBubble";
 import { InputBar } from "./InputBar";
 import { ActionButtons } from "./ActionButtons";
@@ -11,6 +11,7 @@ export function ChatWindow({
   actions,
   authed,
   loading,
+  settledOrder,
   onSend,
   onRun,
   onRequireLogin,
@@ -19,6 +20,7 @@ export function ChatWindow({
   actions: Action[];
   authed: boolean;
   loading: boolean;
+  settledOrder?: OrderState | null;
   onSend: (text: string) => void;
   onRun: (action: string, payload?: Record<string, any>, userEcho?: string) => void;
   onRequireLogin: () => void;
@@ -34,7 +36,13 @@ export function ChatWindow({
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {messages.map((m, i) => (
-            <MessageBubble key={i} message={m} />
+            <MessageBubble
+              key={i}
+              message={m}
+              order={
+                m.proof && settledOrder?.order_id === m.proof.order_id ? settledOrder : null
+              }
+            />
           ))}
           {loading && (
             <div className="flex justify-start">

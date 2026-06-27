@@ -110,7 +110,10 @@ export function StatusPanel({ order }: { order: OrderState | null }) {
 
           {order.deposit_address && !settled && (
             <div className="mt-3 rounded-lg border border-paper-ink/12 bg-paper-ink/[0.03] p-2.5">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">Send {order.token} to</div>
+              <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">
+                Send {order.token}
+                {order.network ? ` on ${order.network.replace("-", " ")}` : ""} to
+              </div>
               <div className="mt-0.5 break-all font-mono text-[11px] text-paper-ink">{order.deposit_address}</div>
             </div>
           )}

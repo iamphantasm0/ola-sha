@@ -1,0 +1,25 @@
+OLA — BRAND KIT
+Stablecoin Concierge · every settlement proven on 0G
+
+COLORS
+  Gold (primary)     #C9A24B
+  Gold (deep)        #8C6B2E
+  Champagne (hi)     #ECD18C
+  Canvas (near-black)#1C170F
+  Cream (panel)      #F0EADD
+
+TYPE
+  Display / wordmark : Playfair Display (Bold/800), high-contrast serif
+  Labels / UI        : Inter (500–600), letter-spaced caps for taglines
+
+FILES
+  logo/      Primary wordmark (gold-on-dark + transparent), cream & flat-gold
+             variants, and the full lockup (wordmark + STABLECOIN CONCIERGE).
+  icons/     Seal monogram (O), "Ola" avatar (square + circular), Apple touch,
+             and a full favicon set (16–512 + .ico). Use a circular avatar for X.
+  banners/   X/Twitter headers, 1500x500. A = minimal; B = proof-seal on 0G.
+             Key elements kept clear of the bottom-left profile-photo overlap.
+
+NOTES
+  Wordmark/lockup are high-resolution PNG (not vector). Ask for an SVG re-draw
+  if you need infinite-scale source for print or app stores.
