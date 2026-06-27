@@ -2,21 +2,36 @@ import Link from "next/link";
 import { OrderState } from "../../lib/types";
 import { DownloadReceiptButton } from "./DownloadReceiptButton";
 
-const STORAGE_SCAN = "https://storagescan-galileo.0g.ai/tx";
+// Storage value is a 0G Storage Merkle ROOT (content address), not a tx hash — no explorer
+// resolves it, so it links to Ola's /verify (live retrieval + decode). Chain tx -> chainscan.
 const CHAIN_SCAN = "https://chainscan-galileo.0g.ai/tx";
 
-function HashRow({ label, value, href }: { label: string; value: string; href: string }) {
+function HashRow({
+  label,
+  value,
+  href,
+  internal = false,
+}: {
+  label: string;
+  value: string;
+  href: string;
+  internal?: boolean;
+}) {
+  const cls =
+    "block break-all font-mono text-[11px] text-paper-ink underline decoration-gold/40 underline-offset-2 hover:decoration-gold";
+  const text = `${value.slice(0, 22)}…${value.slice(-6)}`;
   return (
     <div>
       <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">{label}</div>
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className="block break-all font-mono text-[11px] text-paper-ink underline decoration-gold/40 underline-offset-2 hover:decoration-gold"
-      >
-        {value.slice(0, 22)}…{value.slice(-6)}
-      </a>
+      {internal ? (
+        <Link href={href} className={cls}>
+          {text}
+        </Link>
+      ) : (
+        <a href={href} target="_blank" rel="noreferrer" className={cls}>
+          {text}
+        </a>
+      )}
     </div>
   );
 }
@@ -40,7 +55,12 @@ export function ReceiptCard({ order }: { order: OrderState }) {
 
       <div className="space-y-2.5 pr-12">
         {order.storage_hash && (
-          <HashRow label="0G Storage record" value={order.storage_hash} href={`${STORAGE_SCAN}/${order.storage_hash}`} />
+          <HashRow
+            label="0G Storage record"
+            value={order.storage_hash}
+            href={`/verify?id=${encodeURIComponent(order.storage_hash)}`}
+            internal
+          />
         )}
         {order.registry_tx_hash && (
           <HashRow label="0G Chain settlement" value={order.registry_tx_hash} href={`${CHAIN_SCAN}/${order.registry_tx_hash}`} />

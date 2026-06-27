@@ -80,7 +80,7 @@ export default function Home() {
           />
         </div>
         <aside className="hidden w-[300px] shrink-0 flex-col gap-3 p-3 md:flex">
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <SidebarPanel order={order} authed={isAuthed} userKey={email} />
           </div>
           <OgRegistryStats variant="compact" />

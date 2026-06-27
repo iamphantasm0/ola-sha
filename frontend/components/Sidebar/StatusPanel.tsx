@@ -45,7 +45,7 @@ export function StatusPanel({ order }: { order: OrderState | null }) {
   const failed = order?.status === "FAILED" || order?.status === "CANCELLED";
 
   return (
-    <div className="paper paper-lines flex h-full flex-col rounded-2xl p-5">
+    <div className="paper paper-lines flex min-h-full flex-col rounded-2xl p-5">
       <div className="flex items-baseline justify-between border-b border-paper-ink/10 pb-3">
         <span className="font-display text-lg text-paper-ink">Statement</span>
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-paper-muted">

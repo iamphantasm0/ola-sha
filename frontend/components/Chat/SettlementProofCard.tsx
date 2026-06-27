@@ -2,7 +2,8 @@ import Link from "next/link";
 import { OrderState, SettlementProof } from "../../lib/types";
 import { DownloadReceiptButton } from "../Sidebar/DownloadReceiptButton";
 
-const STORAGE_SCAN = "https://storagescan-galileo.0g.ai/tx";
+// The storage value is a 0G Storage Merkle ROOT (content address), not a tx hash —
+// no explorer resolves it, so we link to Ola's /verify which retrieves + decodes it live.
 const CHAIN_SCAN = "https://chainscan-galileo.0g.ai/tx";
 
 function shortHash(h: string) {
@@ -38,14 +39,12 @@ export function SettlementProofCard({
         {proof.storage_hash && (
           <div>
             <div className="text-[9px] uppercase tracking-[0.12em] text-muted">Storage record</div>
-            <a
-              href={`${STORAGE_SCAN}/${proof.storage_hash}`}
-              target="_blank"
-              rel="noreferrer"
+            <Link
+              href={`/verify?id=${encodeURIComponent(proof.storage_hash)}`}
               className="font-mono text-[11px] text-text underline decoration-gold/40 hover:decoration-gold"
             >
               {shortHash(proof.storage_hash)}
-            </a>
+            </Link>
           </div>
         )}
         {proof.registry_tx_hash && (
