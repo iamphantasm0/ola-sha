@@ -1,4 +1,5 @@
 import logging
+import re
 import uuid
 from typing import Optional
 
@@ -43,6 +44,35 @@ class PaycrestProvider(IFiatProvider):
         "bnb": "bnb-smart-chain",
         "bsc": "bnb-smart-chain",
     }
+    NETWORK_ALIASES = {
+        "arb": "arbitrum",
+        "matic": "polygon",
+        "eth": "ethereum",
+    }
+
+    _NETWORK_PATTERNS = (
+        (re.compile(r"\b(arb|arbitrum(?:-one)?)\b", re.I), "arbitrum"),
+        (re.compile(r"\b(base)\b", re.I), "base"),
+        (re.compile(r"\b(polygon|matic)\b", re.I), "polygon"),
+        (re.compile(r"\b(ethereum|eth)\b", re.I), "ethereum"),
+    )
+
+    @classmethod
+    def infer_network_from_text(cls, text: str) -> Optional[str]:
+        """Best-effort parse of 'on arb', 'from arbitrum', etc. from the user's message."""
+        for pattern, canonical in cls._NETWORK_PATTERNS:
+            if pattern.search(text or ""):
+                return canonical
+        return None
+
+    @classmethod
+    def normalize_network(cls, network: Optional[str]) -> str:
+        """User-facing network name stored on the order (defaults to base)."""
+        n = (network or cls.DEFAULT_NETWORK).lower().strip()
+        n = cls.NETWORK_ALIASES.get(n, n)
+        if n in cls.NETWORK_MAP:
+            return n
+        return cls.DEFAULT_NETWORK
 
     @classmethod
     def _network(cls, network: str) -> str:
@@ -58,8 +88,10 @@ class PaycrestProvider(IFiatProvider):
 
     # ─── Rates (public endpoint — no API key) ────────────────────────────────
 
-    async def get_offramp_quote(self, token: str, amount: float, currency: str) -> QuoteResult:
-        data = await self._get_rates(token, amount, currency)
+    async def get_offramp_quote(
+        self, token: str, amount: float, currency: str, network: str = "base"
+    ) -> QuoteResult:
+        data = await self._get_rates(token, amount, currency, network)
         sell = data.get("sell") or {}
         rate = float(sell.get("rate") or data.get("rate", 0))
         return QuoteResult(
@@ -90,8 +122,9 @@ class PaycrestProvider(IFiatProvider):
             fee_currency=currency,
         )
 
-    async def _get_rates(self, token: str, amount: float, currency: str) -> dict:
-        url = f"{self.BASE_URL}/rates/{self.DEFAULT_NETWORK}/{token}/{amount}/{currency}"
+    async def _get_rates(self, token: str, amount: float, currency: str, network: str = "base") -> dict:
+        net = self._network(self.normalize_network(network))
+        url = f"{self.BASE_URL}/rates/{net}/{token}/{amount}/{currency}"
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url)
             resp.raise_for_status()
@@ -266,13 +299,15 @@ class PaycrestProvider(IFiatProvider):
         account_number: str,
         account_name: str,
         sender_id: str,
+        network: str = "base",
     ) -> OrderResult:
+        send_net = self._network(self.normalize_network(network))
         payload = {
             "amount": str(amount),  # STRING — v2 requirement
             "source": {
                 "type": "crypto",
                 "currency": token,
-                "network": self.DEFAULT_NETWORK,
+                "network": send_net,
                 "refundAddress": settings.PAYCREST_REFUND_ADDRESS,
             },
             "destination": {

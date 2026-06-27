@@ -55,7 +55,9 @@ class IFiatProvider(ABC):
     """Interface for fiat <-> stablecoin providers (Paycrest, Transak, etc.)."""
 
     @abstractmethod
-    async def get_offramp_quote(self, token: str, amount: float, currency: str) -> QuoteResult:
+    async def get_offramp_quote(
+        self, token: str, amount: float, currency: str, network: str = "base"
+    ) -> QuoteResult:
         ...
 
     @abstractmethod
@@ -68,6 +70,7 @@ class IFiatProvider(ABC):
         account_number: str,
         account_name: str,
         sender_id: str,
+        network: str = "base",
     ) -> OrderResult:
         ...
 

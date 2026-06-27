@@ -31,6 +31,7 @@ export interface OrderState {
   bank_name?: string | null;
   account_number?: string | null;
   deposit_address: string | null;
+  network?: string | null;
   storage_hash: string | null;
   registry_tx_hash: string | null;
   paycrest_order_id: string | null;

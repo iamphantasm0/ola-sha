@@ -99,6 +99,11 @@ async def chat(
         except json.JSONDecodeError:
             tool_args = {}
 
+        if tc.function.name == "get_offramp_quote" and not tool_args.get("network"):
+            inferred = PaycrestProvider.infer_network_from_text(req.message)
+            if inferred:
+                tool_args["network"] = inferred
+
         tool_result = await dispatch_tool_call(
             tool_name=tc.function.name,
             tool_args=tool_args,
@@ -129,7 +134,7 @@ async def chat(
     reply = _strip_reasoning(reply)
     await ConversationRepository.add_message(db, req.session_id, "assistant", reply)
 
-    order = await OrderRepository.get_latest_by_session(db, req.session_id)
-    # Bind a freshly-created (anonymous) order to the authenticated caller.
+    # Return the in-progress order only — never a prior SETTLED/CANCELLED order from this session.
+    order = await OrderRepository.get_active_by_session(db, req.session_id)
     await ensure_order_access(db, order, user)
     return await assemble_response(db, order, user, reply, tool_called)

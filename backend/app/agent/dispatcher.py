@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.tools import TOOLS_BY_STATE
 from app.models.order import Order, OrderStatus
 from app.providers.base import IFiatProvider
+from app.providers.paycrest import PaycrestProvider
 from app.repositories.accounts import AccountRepository
 from app.repositories.orders import OrderRepository
 from app.services import orders_flow
@@ -65,18 +66,23 @@ async def dispatch_tool_call(
 # ─── Quotes (also transition state to *_QUOTING so confirm_* becomes allowed) ──
 
 async def _get_offramp_quote(args, order, session_id, provider, db, user=None) -> str:
-    q = await provider.get_offramp_quote(args["token"], float(args["amount"]), args["currency"])
+    network = PaycrestProvider.normalize_network(
+        args.get("network") or (order.network if order else None)
+    )
+    q = await provider.get_offramp_quote(
+        args["token"], float(args["amount"]), args["currency"], network=network
+    )
     # Re-quote: if there's an existing order with no Paycrest order yet, update it in place.
     if order and not order.paycrest_order_id:
         await OrderRepository.update(
             db, order, direction="offramp", token=q.input_currency, amount=q.input_amount,
             currency=q.output_currency, rate=q.rate, output_amount=q.output_amount,
-            status=OrderStatus.OFFRAMP_QUOTING,
+            network=network, status=OrderStatus.OFFRAMP_QUOTING,
         )
     else:
         await OrderRepository.create_quote(
             db, session_id, "offramp", q.input_currency, q.input_amount, q.output_currency,
-            q.rate, q.output_amount, OrderStatus.OFFRAMP_QUOTING,
+            q.rate, q.output_amount, OrderStatus.OFFRAMP_QUOTING, network=network,
         )
     return json.dumps({
         "direction": "offramp",
@@ -84,6 +90,7 @@ async def _get_offramp_quote(args, order, session_id, provider, db, user=None) -
         "you_send": f"{q.input_amount} {q.input_currency}",
         "you_receive": f"{q.output_amount:,.2f} {q.output_currency}",
         "fee": f"{q.fee} {q.fee_currency}",
+        "send_network": network,
     })
 
 

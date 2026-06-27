@@ -133,6 +133,7 @@ class OrderRepository:
         rate: float,
         output_amount: float,
         status: OrderStatus,
+        network: str | None = None,
     ) -> Order:
         """Create a pending order from a quote AND set the QUOTING state."""
         order = Order(
@@ -144,6 +145,7 @@ class OrderRepository:
             rate=rate,
             output_amount=output_amount,
             status=status,
+            network=network,
         )
         db.add(order)
         await db.commit()

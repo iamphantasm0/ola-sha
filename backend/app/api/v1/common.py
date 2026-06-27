@@ -41,6 +41,7 @@ def order_state_json(order: Optional[Order]) -> Optional[dict]:
         "bank_name": order.bank_name,
         "account_number": order.account_number,
         "deposit_address": order.deposit_address,
+        "network": order.network,
         "storage_hash": order.storage_hash,
         "registry_tx_hash": order.registry_tx_hash,
         "paycrest_order_id": order.paycrest_order_id,

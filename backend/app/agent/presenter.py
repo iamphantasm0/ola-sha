@@ -26,11 +26,13 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
         return r.get("message") or r.get("error")
 
     if tool_name == "get_offramp_quote":
+        net = (r.get("send_network") or "base").replace("-", " ").title()
         return (
             "Here's your quote:\n\n"
             f"You send: {r.get('you_send')}\n"
             f"You receive: {r.get('you_receive')}\n"
-            f"Fee: {r.get('fee')}\n\n"
+            f"Fee: {r.get('fee')}\n"
+            f"Send from: **{net}**\n\n"
             "Choose where to receive your payout below — or just tell me a different amount."
         )
 
@@ -68,10 +70,11 @@ def render_tool_reply(tool_name: str, result_str: str) -> Optional[str]:
 
     if tool_name == "confirm_bank_details":
         valid = f"\nThis address is valid until {r['valid_until']}." if r.get("valid_until") else ""
+        net = (r.get("deposit_network") or "base").replace("arbitrum-one", "arbitrum").replace("-", " ").title()
         return (
             f"Paying out to **{r.get('verified_account_name')}** ({r.get('bank')}).\n\n"
             f"To complete your sell, send exactly **{r.get('send_exactly')}** on "
-            f"**{r.get('deposit_network')}** to:\n\n"
+            f"**{net}** to:\n\n"
             f"`{r.get('deposit_address')}`"
             f"{valid}\n\n"
             "Reply once you've sent it and I'll track the settlement."

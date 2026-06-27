@@ -134,5 +134,5 @@ async def action(
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {a}")
 
-    order = await OrderRepository.get_latest_by_session(db, req.session_id)
+    order = await OrderRepository.get_by_id(db, str(order.id))
     return await assemble_response(db, order, user, reply)

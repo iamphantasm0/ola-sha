@@ -76,12 +76,20 @@ export function useChat() {
   const apply = useCallback((res: { reply: string; order_state: OrderState | null; actions: Action[] }) => {
     const proof = res.order_state ? proofFromOrder(res.order_state) : undefined;
     let content = res.reply;
-    if (proof && res.order_state?.status === "SETTLED" && !proofShownRef.current.has(proof.order_id)) {
+    const looksLikeQuote =
+      /here'?s your (sell )?quote/i.test(content) || /reply \*\*yes\*\* to confirm/i.test(content);
+    if (
+      proof &&
+      res.order_state?.status === "SETTLED" &&
+      !looksLikeQuote &&
+      !proofShownRef.current.has(proof.order_id)
+    ) {
       if (!content.toLowerCase().includes("settled")) {
         content = `${content}\n\nSettled. ✅ Notarized on 0G.`;
       }
     }
-    if (proof && !proofShownRef.current.has(proof.order_id)) {
+    const showProof = proof && !looksLikeQuote && !proofShownRef.current.has(proof.order_id);
+    if (showProof && proof) {
       proofShownRef.current.add(proof.order_id);
       setMessages((m) => [...m, { role: "assistant", content, proof }]);
     } else {

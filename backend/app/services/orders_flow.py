@@ -76,6 +76,7 @@ async def create_offramp(db: AsyncSession, order: Order, provider: IFiatProvider
             token=order.token, amount=float(order.amount), currency=order.currency,
             institution_code=order.institution_code, account_number=order.account_number,
             account_name=order.account_name, sender_id=sender_id,
+            network=order.network or "base",
         )
     except ProviderError as e:
         return {"error": f"Couldn't create the order: {e}"}
