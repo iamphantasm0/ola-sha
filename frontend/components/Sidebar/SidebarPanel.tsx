@@ -50,7 +50,7 @@ export function SidebarPanel({
           History
         </button>
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {active === "history" ? (
           <HistoryPanel refreshKey={userKey ?? undefined} />
         ) : (

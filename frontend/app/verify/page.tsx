@@ -92,14 +92,9 @@ function SettlementCard({
       <div className="mt-3 space-y-2 text-[12px]">
         <div>
           <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">0G Storage record</div>
-          <a
-            href={s.storage_url ?? "#"}
-            target="_blank"
-            rel="noreferrer"
-            className="break-all font-mono text-paper-ink underline decoration-gold/40 hover:decoration-gold"
-          >
-            {short(s.storage_hash)}
-          </a>
+          {/* Merkle root (content address) — not an explorer tx; the decoded record is
+              retrieved live from 0G Storage and shown below on this page. */}
+          <span className="break-all font-mono text-paper-ink">{short(s.storage_hash)}</span>
         </div>
         <div>
           <div className="text-[10px] uppercase tracking-[0.12em] text-paper-muted">0G Chain settlement</div>
