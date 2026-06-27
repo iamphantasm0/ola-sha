@@ -195,24 +195,9 @@ Round of 32 updates: [CHANGELOG.md](CHANGELOG.md).
 
 Ola is a Zero Cup 2026 entry (a 6-round knockout: Group Stage → Round of 32 → 16 → QF → SF → Final).
 Plan by round:
+.
 
-**Round 1 — Group Stage (submitted):**
-- ✅ Live deployed app, real settled transaction, all three 0G services verified on-chain
-- ▢ 2–3 min demo video (intent → quote → confirm → pay → settle → read the storage hash off-chain
-  in the OlaRegistry `OrderSettled` event)
-
-**Knockout rounds — raise the bar:**
-- ✅ **Verify-a-receipt page** — public `/verify` with search-by-ID, `/verify?id=` shareable links,
-  live Storage + Chain proof, paginated recent list.
-- ✅ **Deepen the 0G story (partial)** — on-chain stats dashboard (`totalSettlements` + volume/corridors
-  on home + verify); inline `SettlementProofCard` in chat at settlement. Still open: fuller audit
-  trail on Storage, 0G DA exploration.
-- ▢ **Agent tool-call trace** — structured "what Ola did" log (tool names + masked args), not raw CoT.
-- **Polish** — statement panel on mobile, a standalone saved-accounts manager, error states, and the
-  minimax latency (faster model or a more intentional "thinking" state).
-- **Pitch** — sharpen the README "why this wins" + a short deck for later rounds.
-
-**Bigger bets (later rounds / if it gets competitive):**
+**Bigger bets**
 - **`/mywallet` — managed wallets per user** (like Sterling Concierge): Ola custodies/manages a
   wallet for each user so they can buy/sell without bringing their own. Needs wallet infra + secure
   key management (e.g. an embedded-wallet provider or MPC).
